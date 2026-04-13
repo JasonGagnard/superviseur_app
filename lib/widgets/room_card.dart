@@ -26,7 +26,6 @@ class RoomCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // --- LIGNE DU HAUT : Nom et Icônes de statut ---
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -57,18 +56,13 @@ class RoomCard extends StatelessWidget {
               ],
             ),
             const Spacer(),
-            
-            // --- MILIEU : Affichage de la Température ---
             if (room.showTemperature)
               Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
                     room.temperature.toStringAsFixed(1),
-                    style: const TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
                   ),
                   const Padding(
                     padding: EdgeInsets.only(bottom: 4, left: 2),
@@ -76,10 +70,7 @@ class RoomCard extends StatelessWidget {
                   ),
                 ],
               ),
-              
             const Spacer(),
-            
-            // --- LIGNE DU BAS : IP ESP32 et Bouton Caméra ---
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -87,22 +78,20 @@ class RoomCard extends StatelessWidget {
                   room.espIp,
                   style: const TextStyle(fontSize: 11, color: Colors.blueGrey),
                 ),
-                
-                // LE BOUTON CAMÉRA
                 InkWell(
                   onTap: () => _showCameraView(context),
                   borderRadius: BorderRadius.circular(8),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: Colors.blueGrey.withOpacity(0.2),
+                      color: room.color.withOpacity(0.2), // Utilise la couleur de la pièce ici aussi
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Row(
+                    child: Row(
                       children: [
-                        Icon(Icons.videocam, color: Colors.blueGrey, size: 18),
-                        SizedBox(width: 4),
-                        Text("Live", style: TextStyle(fontSize: 10, color: Colors.blueGrey, fontWeight: FontWeight.bold)),
+                        Icon(Icons.videocam, color: room.color, size: 18),
+                        const SizedBox(width: 4),
+                        const Text("Live", style: TextStyle(fontSize: 10, color: Colors.blueGrey, fontWeight: FontWeight.bold)),
                       ],
                     ),
                   ),
@@ -115,37 +104,32 @@ class RoomCard extends StatelessWidget {
     );
   }
 
-  // ===========================================================================
-  // 1. LA VUE CAMÉRA CORRIGÉE (DIMENSIONS FIXÉES)
-  // ===========================================================================
   void _showCameraView(BuildContext context) {
     showDialog(
       context: context,
       builder: (context) => Dialog(
         backgroundColor: const Color(0xFF1E1E1E),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        // On enveloppe le tout pour forcer les dimensions et éviter les débordements
         child: Container(
-          constraints: const BoxConstraints(maxWidth: 500), // <-- Limite la largeur
+          constraints: const BoxConstraints(maxWidth: 500),
           padding: const EdgeInsets.all(16.0),
-          child: SingleChildScrollView( // <-- Permet de scroller si l'écran est petit
+          child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // --- EN-TÊTE ---
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Expanded(
                       child: Row(
                         children: [
-                          const Icon(Icons.videocam, color: Colors.redAccent),
+                          Icon(Icons.videocam, color: room.color), // Icone de la couleur de la pièce
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
                               "Caméra : ${room.name}", 
                               style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-                              overflow: TextOverflow.ellipsis, // Coupe le texte s'il est trop long
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ],
@@ -159,14 +143,15 @@ class RoomCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 10),
                 
-                // --- L'ÉCRAN DE LA CAMÉRA ---
+                // --- CADRE DE LA CAMÉRA MODIFIÉ ---
                 AspectRatio(
                   aspectRatio: 16 / 9,
                   child: Container(
                     decoration: BoxDecoration(
                       color: Colors.black,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.white24, width: 1),
+                      // Utilisation de la couleur de la pièce pour le cadre
+                      border: Border.all(color: room.color, width: 3), 
                     ),
                     child: Stack(
                       alignment: Alignment.center,
@@ -188,7 +173,6 @@ class RoomCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 20),
                 
-                // --- LES INFOS EN DESSOUS ---
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
@@ -197,23 +181,11 @@ class RoomCard extends StatelessWidget {
                   ),
                   child: Column(
                     children: [
-                      _buildCamInfoRow(
-                        Icons.people, 
-                        "Personnes détectées", 
-                        room.isOccupied ? "1 personne" : "Aucune"
-                      ),
+                      _buildCamInfoRow(Icons.people, "Personnes détectées", room.isOccupied ? "1 personne" : "Aucune"),
                       const Divider(color: Colors.white12),
-                      _buildCamInfoRow(
-                        Icons.arrow_downward, 
-                        "Température Min", 
-                        "${(room.temperature - 2.1).toStringAsFixed(1)}°C"
-                      ),
+                      _buildCamInfoRow(Icons.arrow_downward, "Température Min", "${(room.temperature - 2.1).toStringAsFixed(1)}°C"),
                       const Divider(color: Colors.white12),
-                      _buildCamInfoRow(
-                        Icons.arrow_upward, 
-                        "Température Max", 
-                        "${(room.temperature + 1.5).toStringAsFixed(1)}°C"
-                      ),
+                      _buildCamInfoRow(Icons.arrow_upward, "Température Max", "${(room.temperature + 1.5).toStringAsFixed(1)}°C"),
                     ],
                   ),
                 ),
@@ -244,9 +216,6 @@ class RoomCard extends StatelessWidget {
     );
   }
 
-  // ===========================================================================
-  // 2. FENÊTRE DE DÉTAILS CLASSIQUE (Bouton Supprimer)
-  // ===========================================================================
   void _showRoomDetails(BuildContext context) {
     showDialog(
       context: context,
@@ -266,12 +235,7 @@ class RoomCard extends StatelessWidget {
             _buildDetailRow(Icons.wifi, "IP ESP32", room.espIp),
             _buildDetailRow(Icons.thermostat, "Temp. Actuelle", "${room.temperature}°C"),
             _buildDetailRow(Icons.history, "Dernière Connue", "${room.lastKnownTemperature}°C"),
-            _buildDetailRow(
-              room.isOccupied ? Icons.person : Icons.person_outline, 
-              "Occupation", 
-              room.isOccupied ? "Présence" : "Vide"
-            ),
-            
+            _buildDetailRow(room.isOccupied ? Icons.person : Icons.person_outline, "Occupation", room.isOccupied ? "Présence" : "Vide"),
             if (room.isFroidAlerte)
               const Padding(
                 padding: EdgeInsets.only(top: 15.0),
@@ -283,11 +247,9 @@ class RoomCard extends StatelessWidget {
                   ],
                 ),
               ),
-              
             const SizedBox(height: 20),
             const Divider(),
             const SizedBox(height: 10),
-            
             Center(
               child: ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(

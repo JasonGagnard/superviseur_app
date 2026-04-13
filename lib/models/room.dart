@@ -9,20 +9,27 @@ class Room {
   bool isOccupied;
   bool showTemperature; 
   bool showPresence;
-  bool isFroidAlerte; // <--- LA VARIABLE MANQUANTE EST ICI
+  bool isFroidAlerte;
+  
+  // Coordonnées pour le plan architecte
+  double x;
+  double y;
 
   Room({
     required this.name,
     required this.espIp,
     required this.color,
-    this.temperature = 0.0,
-    this.lastKnownTemperature = 0.0,
+    this.temperature = 20.0,
+    this.lastKnownTemperature = 20.0,
     this.isOccupied = false,
     this.showTemperature = true,
     this.showPresence = true,
-    this.isFroidAlerte = false, // Par défaut, pas d'alerte
+    this.isFroidAlerte = false,
+    this.x = 50.0, // Position par défaut
+    this.y = 50.0, // Position par défaut
   });
 
+  // Transformation en JSON pour la sauvegarde
   Map<String, dynamic> toMap() {
     return {
       'name': name,
@@ -33,21 +40,26 @@ class Room {
       'isOccupied': isOccupied,
       'showTemperature': showTemperature,
       'showPresence': showPresence,
-      'isFroidAlerte': isFroidAlerte, // On la sauvegarde
+      'isFroidAlerte': isFroidAlerte,
+      'x': x,
+      'y': y,
     };
   }
 
+  // Création d'une pièce à partir des données sauvegardées
   factory Room.fromMap(Map<String, dynamic> map) {
     return Room(
       name: map['name'],
       espIp: map['espIp'],
       color: Color(map['color']),
-      temperature: map['temperature']?.toDouble() ?? 0.0,
-      lastKnownTemperature: map['lastKnownTemperature']?.toDouble() ?? 0.0,
+      temperature: map['temperature']?.toDouble() ?? 20.0,
+      lastKnownTemperature: map['lastKnownTemperature']?.toDouble() ?? 20.0,
       isOccupied: map['isOccupied'] ?? false,
       showTemperature: map['showTemperature'] ?? true,
       showPresence: map['showPresence'] ?? true,
-      isFroidAlerte: map['isFroidAlerte'] ?? false, // On la charge
+      isFroidAlerte: map['isFroidAlerte'] ?? false,
+      x: map['x']?.toDouble() ?? 50.0,
+      y: map['y']?.toDouble() ?? 50.0,
     );
   }
 }

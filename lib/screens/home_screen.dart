@@ -16,6 +16,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   List<Room> _rooms = [];
   
+  // Liste des IPs de tes ESP32 disponibles
   final List<String> _allEsps = [
     "192.168.1.50", 
     "192.168.1.51", 
@@ -24,7 +25,9 @@ class _HomeScreenState extends State<HomeScreen> {
   ];
   
   final TextEditingController _nameController = TextEditingController();
-  String get _storageKey => 'rooms_${widget.userEmail}';
+  
+  // Clé de stockage unique par utilisateur
+  String get _storageKey => 'plan_rooms_${widget.userEmail}';
 
   @override
   void initState() {
@@ -32,42 +35,33 @@ class _HomeScreenState extends State<HomeScreen> {
     _loadData();
   }
 
+  // --- PERSISTANCE DES DONNÉES ---
   Future<void> _saveData() async {
     final prefs = await SharedPreferences.getInstance();
-    prefs.setString(_storageKey, json.encode(_rooms.map((r) => r.toMap()).toList()));
+    final String encodedData = json.encode(_rooms.map((r) => r.toMap()).toList());
+    await prefs.setString(_storageKey, encodedData);
   }
 
   Future<void> _loadData() async {
     final prefs = await SharedPreferences.getInstance();
-    final data = prefs.getString(_storageKey);
+    final String? data = prefs.getString(_storageKey);
     if (data != null) {
       final List decoded = json.decode(data);
       setState(() {
-        _rooms = decoded.map((i) => Room.fromMap(i)).toList();
+        _rooms = decoded.map((item) => Room.fromMap(item)).toList();
       });
     }
   }
 
-  void _showMsg(String m, Color c) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(m), backgroundColor: c, behavior: SnackBarBehavior.floating)
-    );
-  }
-
-  // --- GESTION DE LA SUPPRESSION ---
+  // --- LOGIQUE DE SUPPRESSION ---
   void _confirmDelete(int index) {
-    String roomName = _rooms[index].name;
-
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (c) => AlertDialog(
         title: const Text("Supprimer la pièce ?"),
-        content: Text("Voulez-vous vraiment supprimer '$roomName' ?\nL'ESP et le nom redeviendront disponibles."),
+        content: Text("Voulez-vous retirer '${_rooms[index].name}' du plan ?"),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("ANNULER"),
-          ),
+          TextButton(onPressed: () => Navigator.pop(c), child: const Text("ANNULER")),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () {
@@ -75,8 +69,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 _rooms.removeAt(index);
                 _saveData();
               });
-              Navigator.pop(context);
-              _showMsg("Pièce '$roomName' supprimée", Colors.blueGrey);
+              Navigator.pop(c);
             },
             child: const Text("OUI, SUPPRIMER", style: TextStyle(color: Colors.white)),
           ),
@@ -85,7 +78,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- GESTION DE LA CRÉATION ---
+  // --- DIALOGUE D'AJOUT (AVEC FILTRAGE ESP) ---
   void _showAddRoom() {
     _nameController.clear();
     String? selEsp;
@@ -93,139 +86,104 @@ class _HomeScreenState extends State<HomeScreen> {
 
     showDialog(
       context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setPopupState) {
-            
-            // Calcul des IPs libres
-            List<String> remainingEsps = _allEsps
-                .where((ip) => !_rooms.any((room) => room.espIp == ip))
-                .toList();
+      builder: (context) => StatefulBuilder(
+        builder: (context, setPopupState) {
+          // On ne montre que les IPs pas encore utilisées
+          List<String> remainingEsps = _allEsps
+              .where((ip) => !_rooms.any((room) => room.espIp == ip))
+              .toList();
 
-            return AlertDialog(
-              title: const Text("Nouvelle Pièce"),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: _nameController,
-                      decoration: const InputDecoration(
-                        labelText: "Nom de la pièce",
-                        hintText: "ex: Cuisine, Chambre...",
-                      ),
-                    ),
-                    const SizedBox(height: 25),
-                    DropdownButtonFormField<String>(
-                      isExpanded: true,
-                      decoration: const InputDecoration(labelText: "Assigner un ESP32"),
-                      hint: const Text("Choisir une IP"),
-                      value: selEsp,
-                      items: remainingEsps.isEmpty 
-                        ? [const DropdownMenuItem(value: null, child: Text("Plus d'ESP disponible", style: TextStyle(color: Colors.red)))]
-                        : remainingEsps.map((ip) => DropdownMenuItem(value: ip, child: Text(ip))).toList(),
-                      onChanged: (val) => setPopupState(() => selEsp = val),
-                    ),
-                    const SizedBox(height: 25),
-                    const Align(alignment: Alignment.centerLeft, child: Text("Couleur d'identification :")),
-                    const SizedBox(height: 15),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Colors.blue, Colors.red, Colors.green, 
-                        Colors.orange, Colors.purple, Colors.teal
-                      ].map((color) => GestureDetector(
-                        onTap: () => setPopupState(() => selColor = color),
-                        child: CircleAvatar(
-                          backgroundColor: color,
-                          radius: 16,
-                          child: selColor == color 
-                            ? const Icon(Icons.check, size: 18, color: Colors.white) 
-                            : null,
-                        ),
-                      )).toList(),
-                    ),
-                  ],
-                ),
+          return AlertDialog(
+            title: const Text("Nouvelle pièce sur le plan"),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(controller: _nameController, decoration: const InputDecoration(labelText: "Nom")),
+                  const SizedBox(height: 20),
+                  DropdownButtonFormField<String>(
+                    decoration: const InputDecoration(labelText: "Assigner ESP32"),
+                    value: selEsp,
+                    items: remainingEsps.map((ip) => DropdownMenuItem(value: ip, child: Text(ip))).toList(),
+                    onChanged: (v) => setPopupState(() => selEsp = v),
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [Colors.blue, Colors.red, Colors.green, Colors.orange, Colors.purple].map((c) => 
+                      GestureDetector(
+                        onTap: () => setPopupState(() => selColor = c),
+                        child: CircleAvatar(backgroundColor: c, radius: 15, child: selColor == c ? const Icon(Icons.check, size: 15, color: Colors.white) : null),
+                      )
+                    ).toList(),
+                  )
+                ],
               ),
-              actions: [
-                TextButton(onPressed: () => Navigator.pop(context), child: const Text("Annuler")),
-                ElevatedButton(
-                  onPressed: () {
-                    String name = _nameController.text.trim();
-                    if (name.isEmpty) {
-                      _showMsg("Le nom ne peut pas être vide", Colors.orange);
-                      return;
-                    }
-                    if (_rooms.any((r) => r.name.toLowerCase() == name.toLowerCase())) {
-                      _showMsg("Ce nom est déjà utilisé", Colors.redAccent);
-                      return;
-                    }
-                    if (selEsp == null) {
-                      _showMsg("Veuillez sélectionner un ESP", Colors.orange);
-                      return;
-                    }
-
-                    setState(() {
-                      _rooms.add(Room(
-                        name: name, 
-                        espIp: selEsp!, 
-                        color: selColor,
-                        temperature: 20.0,
-                        lastKnownTemperature: 20.0,
-                        isOccupied: false,
-                        showTemperature: true,
-                        showPresence: true,
-                        isFroidAlerte: false, // Valeur par défaut
-                      ));
-                      _saveData();
-                    });
-                    
-                    Navigator.pop(context);
-                    _showMsg("Pièce '$name' ajoutée", Colors.green);
-                  }, 
-                  child: const Text("CRÉER")
-                ),
-              ],
-            );
-          },
-        );
-      },
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(context), child: const Text("Annuler")),
+              ElevatedButton(
+                onPressed: () {
+                  if (_nameController.text.isEmpty || selEsp == null) return;
+                  setState(() {
+                    _rooms.add(Room(name: _nameController.text, espIp: selEsp!, color: selColor));
+                    _saveData();
+                  });
+                  Navigator.pop(context);
+                }, 
+                child: const Text("AJOUTER")
+              ),
+            ],
+          );
+        }
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF0F2F5),
       appBar: AppBar(
-        title: Text("SACHA - ${widget.userEmail}"),
+        title: Text("SACHA - Plan de ${widget.userEmail}"),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.settings), 
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (c) => const SettingsScreen()))
-          ),
+          IconButton(icon: const Icon(Icons.settings), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (c) => const SettingsScreen()))),
         ],
       ),
       body: _rooms.isEmpty 
-          ? const Center(child: Text("Votre tableau de bord est vide.\nAjoutez votre première pièce !", textAlign: TextAlign.center)) 
-          : GridView.builder(
-              padding: const EdgeInsets.all(12),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2, 
-                childAspectRatio: 1.4, // <-- Ratio modifié pour laisser la carte respirer
-                crossAxisSpacing: 12, 
-                mainAxisSpacing: 12
-              ),
-              itemCount: _rooms.length,
-              itemBuilder: (c, i) => RoomCard(
-                room: _rooms[i],
-                onDelete: () => _confirmDelete(i), // <-- Fait le lien avec la fonction de suppression
-              ),
+          ? const Center(child: Text("Plan vide.\nAppuyez sur + pour commencer.", textAlign: TextAlign.center)) 
+          : Stack(
+              children: _rooms.asMap().entries.map((entry) {
+                int index = entry.key;
+                Room room = entry.value;
+
+                return Positioned(
+                  left: room.x,
+                  top: room.y,
+                  child: GestureDetector(
+                    // Logique de Drag & Drop
+                    onPanUpdate: (details) {
+                      setState(() {
+                        room.x += details.delta.dx;
+                        room.y += details.delta.dy;
+                      });
+                    },
+                    onPanEnd: (details) => _saveData(), // Sauvegarde après déplacement
+                    child: SizedBox(
+                      width: 240, // Largeur fixe pour le bloc plan
+                      height: 180, // Hauteur fixe pour le bloc plan
+                      child: RoomCard(
+                        room: room,
+                        onDelete: () => _confirmDelete(index),
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
             ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _showAddRoom, 
-        label: const Text("Ajouter une pièce"),
-        icon: const Icon(Icons.add),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _showAddRoom,
+        child: const Icon(Icons.add),
       ),
     );
   }
