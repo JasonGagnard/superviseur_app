@@ -88,9 +88,9 @@ class RoomCard extends StatelessWidget {
                   style: const TextStyle(fontSize: 11, color: Colors.blueGrey),
                 ),
                 
-                // LE NOUVEAU BOUTON CAMÉRA
+                // LE BOUTON CAMÉRA
                 InkWell(
-                  onTap: () => _showCameraView(context), // Ouvre la vue Caméra
+                  onTap: () => _showCameraView(context),
                   borderRadius: BorderRadius.circular(8),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -116,110 +116,115 @@ class RoomCard extends StatelessWidget {
   }
 
   // ===========================================================================
-  // 1. LA NOUVELLE VUE CAMÉRA (MONITEUR NOIR)
+  // 1. LA VUE CAMÉRA CORRIGÉE (DIMENSIONS FIXÉES)
   // ===========================================================================
   void _showCameraView(BuildContext context) {
     showDialog(
       context: context,
       builder: (context) => Dialog(
-        backgroundColor: const Color(0xFF1E1E1E), // Fond sombre pour la caméra
+        backgroundColor: const Color(0xFF1E1E1E),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        child: Padding(
+        // On enveloppe le tout pour forcer les dimensions et éviter les débordements
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 500), // <-- Limite la largeur
           padding: const EdgeInsets.all(16.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // EN-TÊTE : Titre et Croix pour fermer
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.videocam, color: Colors.redAccent),
-                      const SizedBox(width: 10),
-                      Text(
-                        "Caméra : ${room.name}", 
-                        style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)
-                      ),
-                    ],
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white70),
-                    onPressed: () => Navigator.pop(context), // Quitte l'affichage caméra
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              
-              // L'ÉCRAN DE LA CAMÉRA (Simulé)
-              AspectRatio(
-                aspectRatio: 16 / 9,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.black,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.white24, width: 1),
-                  ),
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      // Icône de caméra au centre
-                      const Icon(Icons.play_circle_outline, color: Colors.white24, size: 60),
-                      
-                      // Badge "EN DIRECT" en haut à droite
-                      Positioned(
-                        top: 10, right: 10,
-                        child: Row(
-                          children: [
-                            Container(width: 8, height: 8, decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle)),
-                            const SizedBox(width: 5),
-                            const Text("EN DIRECT", style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              
-              // LES INFOS EN DESSOUS DE LA CAMÉRA
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.05),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Column(
+          child: SingleChildScrollView( // <-- Permet de scroller si l'écran est petit
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // --- EN-TÊTE ---
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    _buildCamInfoRow(
-                      Icons.people, 
-                      "Personnes détectées", 
-                      room.isOccupied ? "1 personne" : "Aucune"
+                    Expanded(
+                      child: Row(
+                        children: [
+                          const Icon(Icons.videocam, color: Colors.redAccent),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              "Caméra : ${room.name}", 
+                              style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                              overflow: TextOverflow.ellipsis, // Coupe le texte s'il est trop long
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    const Divider(color: Colors.white12),
-                    _buildCamInfoRow(
-                      Icons.arrow_downward, 
-                      "Température Min", 
-                      "${(room.temperature - 2.1).toStringAsFixed(1)}°C" // Donnée simulée
-                    ),
-                    const Divider(color: Colors.white12),
-                    _buildCamInfoRow(
-                      Icons.arrow_upward, 
-                      "Température Max", 
-                      "${(room.temperature + 1.5).toStringAsFixed(1)}°C" // Donnée simulée
+                    IconButton(
+                      icon: const Icon(Icons.close, color: Colors.white70),
+                      onPressed: () => Navigator.pop(context),
                     ),
                   ],
                 ),
-              ),
-            ],
+                const SizedBox(height: 10),
+                
+                // --- L'ÉCRAN DE LA CAMÉRA ---
+                AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.black,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.white24, width: 1),
+                    ),
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        const Icon(Icons.play_circle_outline, color: Colors.white24, size: 60),
+                        Positioned(
+                          top: 10, right: 10,
+                          child: Row(
+                            children: [
+                              Container(width: 8, height: 8, decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle)),
+                              const SizedBox(width: 5),
+                              const Text("EN DIRECT", style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                
+                // --- LES INFOS EN DESSOUS ---
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    children: [
+                      _buildCamInfoRow(
+                        Icons.people, 
+                        "Personnes détectées", 
+                        room.isOccupied ? "1 personne" : "Aucune"
+                      ),
+                      const Divider(color: Colors.white12),
+                      _buildCamInfoRow(
+                        Icons.arrow_downward, 
+                        "Température Min", 
+                        "${(room.temperature - 2.1).toStringAsFixed(1)}°C"
+                      ),
+                      const Divider(color: Colors.white12),
+                      _buildCamInfoRow(
+                        Icons.arrow_upward, 
+                        "Température Max", 
+                        "${(room.temperature + 1.5).toStringAsFixed(1)}°C"
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  // Petit widget pour générer les lignes d'informations sous la caméra proprement
   Widget _buildCamInfoRow(IconData icon, String label, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4.0),
@@ -240,7 +245,7 @@ class RoomCard extends StatelessWidget {
   }
 
   // ===========================================================================
-  // 2. FENÊTRE DE DÉTAILS CLASSIQUE (Celle qui contient le bouton Supprimer)
+  // 2. FENÊTRE DE DÉTAILS CLASSIQUE (Bouton Supprimer)
   // ===========================================================================
   void _showRoomDetails(BuildContext context) {
     showDialog(
