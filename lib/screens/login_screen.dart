@@ -1,72 +1,59 @@
+// lib/screens/login_screen.dart
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'home_screen.dart';
+import 'signup_screen.dart'; // Import de la nouvelle page
+import '../utils/mock_db.dart'; // Import de notre base de données
 
 class LoginScreen extends StatefulWidget {
+  const LoginScreen({super.key});
+
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
 class _LoginScreenState extends State<LoginScreen> {
   bool _isObscured = true;
-  bool _isLoading = false; // Pour afficher un chargement
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
 
-  // Fonction de connexion Supabase
-  Future<void> _handleSignIn() async {
-    setState(() => _isLoading = true);
-    try {
-      final email = _emailController.text.trim();
-      final password = _passwordController.text.trim();
+  void _handleSignIn() {
+    final identifiant = _emailController.text.trim();
+    final password = _passwordController.text.trim();
 
-      if (email.isEmpty || password.isEmpty) {
-        throw 'Veuillez remplir tous les champs';
-      }
-
-      await Supabase.instance.client.auth.signInWithPassword(
-        email: email,
-        password: password,
-      );
-
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const HomeScreen()),
-        );
-      }
-    } on AuthException catch (e) {
-      _showSnackBar(e.message, Colors.redAccent);
-    } catch (e) {
-      _showSnackBar(e.toString(), Colors.redAccent);
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+    if (identifiant.isEmpty || password.isEmpty) {
+      _showSnackBar("Veuillez remplir tous les champs", Colors.orange);
+      return;
     }
-  }
 
-  // Fonction d'inscription (Optionnelle mais utile au début)
-  Future<void> _handleSignUp() async {
-    setState(() => _isLoading = true);
-    try {
-      await Supabase.instance.client.auth.signUp(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
-      );
-      _showSnackBar("Compte créé ! Connectez-vous.", Colors.green);
-    } on AuthException catch (e) {
-      _showSnackBar(e.message, Colors.redAccent);
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+    // On vérifie si l'utilisateur existe
+    if (MockDB.users.containsKey(identifiant)) {
+      final userData = MockDB.users[identifiant]!;
+      
+      // On vérifie le mot de passe
+      if (userData['password'] == password) {
+        
+        // --- NOUVEAUTÉ : ON VÉRIFIE LA VALIDATION ---
+        if (userData['isValidated'] == true) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const HomeScreen()),
+          );
+        } else {
+          // L'utilisateur existe, le mdp est bon, mais pas de validation
+          _showSnackBar("Votre compte n'est pas encore validé. Vérifiez vos emails.", Colors.orange);
+        }
+        
+      } else {
+        _showSnackBar("Identifiant ou mot de passe incorrect", Colors.redAccent);
+      }
+    } else {
+      _showSnackBar("Identifiant ou mot de passe incorrect", Colors.redAccent);
     }
   }
 
   void _showSnackBar(String message, Color color) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: color,
-        behavior: SnackBarBehavior.floating,
-      ),
+      SnackBar(content: Text(message), backgroundColor: color, behavior: SnackBarBehavior.floating),
     );
   }
 
@@ -80,26 +67,12 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Image.asset(
-                'assets/sacha.png',
-                height: 80,
-                errorBuilder: (context, error, stackTrace) => const Text(
-                  "SACHA",
-                  style: TextStyle(fontSize: 40, fontWeight: FontWeight.bold, color: Color(0xFF00B0FF), letterSpacing: 3),
-                ),
-              ),
+              Image.asset('assets/sacha.png', height: 80, errorBuilder: (c, e, s) => const Text("SACHA", style: TextStyle(fontSize: 40, color: Color(0xFF00B0FF)))),
               const SizedBox(height: 60),
 
               TextField(
                 controller: _emailController,
-                keyboardType: TextInputType.emailAddress,
-                decoration: InputDecoration(
-                  labelText: "Email",
-                  labelStyle: const TextStyle(color: Colors.blueGrey, fontSize: 14),
-                  prefixIcon: const Icon(Icons.email_outlined, color: Colors.blueGrey, size: 20),
-                  enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.grey.shade300)),
-                  focusedBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF26C6DA), width: 2)),
-                ),
+                decoration: const InputDecoration(labelText: "Identifiant", prefixIcon: Icon(Icons.person_outline)),
               ),
               const SizedBox(height: 25),
 
@@ -108,52 +81,39 @@ class _LoginScreenState extends State<LoginScreen> {
                 obscureText: _isObscured,
                 decoration: InputDecoration(
                   labelText: "Mot de passe",
-                  labelStyle: const TextStyle(color: Colors.blueGrey, fontSize: 14),
-                  prefixIcon: const Icon(Icons.lock_outline, color: Colors.blueGrey, size: 20),
+                  prefixIcon: const Icon(Icons.lock_outline),
                   suffixIcon: IconButton(
-                    icon: Icon(_isObscured ? Icons.visibility_off : Icons.visibility, size: 20),
+                    icon: Icon(_isObscured ? Icons.visibility_off : Icons.visibility),
                     onPressed: () => setState(() => _isObscured = !_isObscured),
                   ),
-                  enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.grey.shade300)),
-                  focusedBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF26C6DA), width: 2)),
                 ),
               ),
               const SizedBox(height: 60),
 
-              // Bouton Connexion
               Container(
                 width: double.infinity,
                 height: 50,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(25),
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF00B0FF), Color(0xFF00E676)],
-                    begin: Alignment.centerLeft,
-                    end: Alignment.centerRight,
-                  ),
+                  gradient: const LinearGradient(colors: [Color(0xFF00B0FF), Color(0xFF00E676)]),
                 ),
                 child: ElevatedButton(
-                  onPressed: _isLoading ? null : _handleSignIn,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.transparent,
-                    shadowColor: Colors.transparent,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
-                  ),
-                  child: _isLoading 
-                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                    : const Text("SE CONNECTER", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  onPressed: _handleSignIn,
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.transparent, shadowColor: Colors.transparent),
+                  child: const Text("SE CONNECTER", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                 ),
               ),
-              
               const SizedBox(height: 20),
               
-              // Lien Inscription
+              // --- BOUTON POUR ALLER SUR LA PAGE D'INSCRIPTION ---
               TextButton(
-                onPressed: _isLoading ? null : _handleSignUp,
-                child: const Text(
-                  "Pas de compte ? Créer un profil SACHA",
-                  style: TextStyle(color: Colors.blueGrey, fontSize: 12),
-                ),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const SignUpScreen()),
+                  );
+                },
+                child: const Text("Pas de compte ? Créer un profil SACHA", style: TextStyle(color: Colors.blueGrey)),
               ),
             ],
           ),
