@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'screens/login_screen.dart';
 
 void main() {
-  // Plus besoin de Supabase.initialize ici
   runApp(const MyApp());
 }
 

@@ -5,11 +5,11 @@ class Room {
   final String espIp;
   final Color color;
   double temperature;
-  double lastKnownTemperature; // Pour comparer et détecter une chute
+  double lastKnownTemperature;
   bool isOccupied;
-
   bool showTemperature; 
   bool showPresence;
+  bool isFroidAlerte; // <--- LA VARIABLE MANQUANTE EST ICI
 
   Room({
     required this.name,
@@ -20,10 +20,34 @@ class Room {
     this.isOccupied = false,
     this.showTemperature = true,
     this.showPresence = true,
+    this.isFroidAlerte = false, // Par défaut, pas d'alerte
   });
 
-  // Déclenche l'alerte si la température a chuté de plus de 2°C
-  bool get isFroidAlerte {
-    return (lastKnownTemperature - temperature) > 2.0;
+  Map<String, dynamic> toMap() {
+    return {
+      'name': name,
+      'espIp': espIp,
+      'color': color.value,
+      'temperature': temperature,
+      'lastKnownTemperature': lastKnownTemperature,
+      'isOccupied': isOccupied,
+      'showTemperature': showTemperature,
+      'showPresence': showPresence,
+      'isFroidAlerte': isFroidAlerte, // On la sauvegarde
+    };
+  }
+
+  factory Room.fromMap(Map<String, dynamic> map) {
+    return Room(
+      name: map['name'],
+      espIp: map['espIp'],
+      color: Color(map['color']),
+      temperature: map['temperature']?.toDouble() ?? 0.0,
+      lastKnownTemperature: map['lastKnownTemperature']?.toDouble() ?? 0.0,
+      isOccupied: map['isOccupied'] ?? false,
+      showTemperature: map['showTemperature'] ?? true,
+      showPresence: map['showPresence'] ?? true,
+      isFroidAlerte: map['isFroidAlerte'] ?? false, // On la charge
+    );
   }
 }
