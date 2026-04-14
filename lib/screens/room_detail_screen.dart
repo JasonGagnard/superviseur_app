@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/room.dart';
+import '../widgets/live_thermal_stream.dart';
 
 class RoomDetailScreen extends StatefulWidget {
   final Room room;
@@ -10,7 +11,10 @@ class RoomDetailScreen extends StatefulWidget {
 }
 
 class _RoomDetailScreenState extends State<RoomDetailScreen> {
-  
+  ThermalFrameStats? _liveStats;
+
+  String _formatTemperature(double value) => '${value.toStringAsFixed(1)}°C';
+
   // Fonction pour ouvrir la caméra thermique en plein écran (HUD mode)
   void _openFullScreenThermal(BuildContext context) {
     showDialog(
@@ -19,17 +23,21 @@ class _RoomDetailScreenState extends State<RoomDetailScreen> {
         backgroundColor: Colors.black,
         child: Stack(
           children: [
-            // Flux thermique plein écran (Simulation Gradient)
-            Container(
-              decoration: const BoxDecoration(
-                gradient: RadialGradient(
-                  colors: [Colors.yellow, Colors.orange, Colors.red, Colors.black],
-                  center: Alignment(0.2, -0.1),
-                  radius: 1.2,
-                ),
+            Positioned.fill(
+              child: LiveThermalStream(
+                streamUrl: widget.room.cameraStreamUrl,
+                accentColor: widget.room.color,
+                showLiveBadge: false,
+                onStats: (stats) {
+                  setState(() {
+                    _liveStats = stats;
+                    widget.room.temperature = stats.currentTemperature;
+                    widget.room.lastKnownTemperature = stats.currentTemperature;
+                  });
+                },
               ),
             ),
-            
+
             // Interface superposée (HUD)
             SafeArea(
               child: Padding(
@@ -41,7 +49,11 @@ class _RoomDetailScreenState extends State<RoomDetailScreen> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         IconButton(
-                          icon: const Icon(Icons.close, color: Colors.white, size: 35),
+                          icon: const Icon(
+                            Icons.close,
+                            color: Colors.white,
+                            size: 35,
+                          ),
                           onPressed: () => Navigator.pop(context),
                         ),
                         const Badge(
@@ -63,9 +75,25 @@ class _RoomDetailScreenState extends State<RoomDetailScreen> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceAround,
                         children: [
-                          _hudItem(Icons.person, "PERSONNES", "2"),
-                          _hudItem(Icons.vertical_align_top, "MAX", "26.8°C"),
-                          _hudItem(Icons.vertical_align_bottom, "MIN", "18.5°C"),
+                          _hudItem(
+                            Icons.person,
+                            "PERSONNES",
+                            widget.room.isOccupied ? "1" : "0",
+                          ),
+                          _hudItem(
+                            Icons.vertical_align_top,
+                            "MAX",
+                            _liveStats != null
+                                ? _formatTemperature(_liveStats!.maxTemperature)
+                                : _formatTemperature(widget.room.temperature),
+                          ),
+                          _hudItem(
+                            Icons.vertical_align_bottom,
+                            "MIN",
+                            _liveStats != null
+                                ? _formatTemperature(_liveStats!.minTemperature)
+                                : _formatTemperature(widget.room.temperature),
+                          ),
                         ],
                       ),
                     ),
@@ -86,8 +114,22 @@ class _RoomDetailScreenState extends State<RoomDetailScreen> {
       children: [
         Icon(icon, color: Colors.blueAccent, size: 28),
         const SizedBox(height: 8),
-        Text(label, style: const TextStyle(color: Colors.white60, fontSize: 10, letterSpacing: 1.1)),
-        Text(value, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 20)),
+        Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white60,
+            fontSize: 10,
+            letterSpacing: 1.1,
+          ),
+        ),
+        Text(
+          value,
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 20,
+          ),
+        ),
       ],
     );
   }
@@ -105,33 +147,41 @@ class _RoomDetailScreenState extends State<RoomDetailScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text("Options d'affichage", 
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const Text(
+              "Options d'affichage",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 10),
-            
+
             SwitchListTile(
               title: const Text("Afficher la température"),
               secondary: const Icon(Icons.thermostat, color: Colors.orange),
               value: widget.room.showTemperature,
-              onChanged: (val) => setState(() => widget.room.showTemperature = val),
+              onChanged: (val) =>
+                  setState(() => widget.room.showTemperature = val),
             ),
 
             SwitchListTile(
               title: const Text("Afficher la présence"),
               secondary: const Icon(Icons.person, color: Colors.blue),
               value: widget.room.showPresence,
-              onChanged: (val) => setState(() => widget.room.showPresence = val),
+              onChanged: (val) =>
+                  setState(() => widget.room.showPresence = val),
             ),
 
             const Divider(height: 40),
 
-            const Text("Vision Thermique", 
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const Text(
+              "Vision Thermique",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 5),
-            const Text("Appuyez sur l'image pour agrandir", 
-                style: TextStyle(fontSize: 12, color: Colors.grey)),
+            const Text(
+              "Appuyez sur l'image pour agrandir",
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
             const SizedBox(height: 15),
-            
+
             // Widget Caméra thermique cliquable
             GestureDetector(
               onTap: () => _openFullScreenThermal(context),
@@ -141,31 +191,53 @@ class _RoomDetailScreenState extends State<RoomDetailScreen> {
                 decoration: BoxDecoration(
                   color: Colors.black,
                   borderRadius: BorderRadius.circular(20),
-                  boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 10, offset: const Offset(0, 5))],
-                  gradient: const RadialGradient(
-                    colors: [Colors.yellow, Colors.orange, Colors.red, Colors.black],
-                    center: Alignment(0.2, -0.1),
-                    radius: 0.8,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black26,
+                      blurRadius: 10,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
+                  border: Border.all(
+                    color: widget.room.color.withValues(alpha: 0.4),
+                    width: 1.5,
                   ),
                 ),
-                child: const Stack(
+                clipBehavior: Clip.antiAlias,
+                child: Stack(
                   children: [
-                    Center(child: Icon(Icons.fullscreen, color: Colors.white54, size: 50)),
-                    Positioned(
-                      top: 15,
-                      left: 15,
-                      child: Icon(Icons.videocam, color: Colors.red, size: 20),
-                    )
+                    Positioned.fill(
+                      child: LiveThermalStream(
+                        streamUrl: widget.room.cameraStreamUrl,
+                        accentColor: widget.room.color,
+                        onStats: (stats) {
+                          setState(() {
+                            _liveStats = stats;
+                            widget.room.temperature = stats.currentTemperature;
+                            widget.room.lastKnownTemperature = stats.currentTemperature;
+                          });
+                        },
+                      ),
+                    ),
+                    const Center(
+                      child: Icon(
+                        Icons.fullscreen,
+                        color: Colors.white54,
+                        size: 50,
+                      ),
+                    ),
                   ],
                 ),
               ),
             ),
-            
+
             const SizedBox(height: 30),
-            const Text("Capteurs additionnels", 
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const Text(
+              "Capteurs additionnels",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 15),
-            
+
             _sensorRow(Icons.water_drop, "Humidité", "45%"),
             _sensorRow(Icons.lightbulb, "Luminosité", "320 lux"),
             _sensorRow(Icons.wifi, "Signal ESP32", "-65 dBm"),
@@ -181,7 +253,10 @@ class _RoomDetailScreenState extends State<RoomDetailScreen> {
       child: ListTile(
         leading: Icon(icon, color: widget.room.color),
         title: Text(label),
-        trailing: Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        trailing: Text(
+          value,
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+        ),
       ),
     );
   }

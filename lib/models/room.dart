@@ -3,14 +3,15 @@ import 'package:flutter/material.dart';
 class Room {
   String name;
   final String espIp;
+  final String cameraUrl;
   final Color color;
   double temperature;
   double lastKnownTemperature;
   bool isOccupied;
-  bool showTemperature; 
+  bool showTemperature;
   bool showPresence;
   bool isFroidAlerte;
-  
+
   // Coordonnées pour le plan architecte
   double x;
   double y;
@@ -18,6 +19,7 @@ class Room {
   Room({
     required this.name,
     required this.espIp,
+    this.cameraUrl = '',
     required this.color,
     this.temperature = 20.0,
     this.lastKnownTemperature = 20.0,
@@ -29,12 +31,48 @@ class Room {
     this.y = 50.0, // Position par défaut
   });
 
+  String get cameraStreamUrl {
+    final value = cameraUrl.trim().isNotEmpty ? cameraUrl.trim() : espIp.trim();
+    if (value.isEmpty) {
+      return '';
+    }
+
+    final normalizedValue = value.contains('://') ? value : 'ws://$value';
+
+    final uri = Uri.tryParse(normalizedValue);
+    if (uri == null) {
+      return normalizedValue;
+    }
+
+    final scheme = uri.scheme == 'http'
+        ? 'ws'
+        : uri.scheme == 'https'
+        ? 'wss'
+        : uri.scheme;
+    final path =
+        uri.path.isEmpty ||
+            uri.path == '/' ||
+            uri.path == '/81' ||
+            uri.path == '81'
+        ? '/'
+        : uri.path;
+
+    return Uri(
+      scheme: scheme,
+      host: uri.host,
+      port: uri.hasPort ? uri.port : 81,
+      path: path,
+      query: uri.query,
+    ).toString();
+  }
+
   // Transformation en JSON pour la sauvegarde
   Map<String, dynamic> toMap() {
     return {
       'name': name,
       'espIp': espIp,
-      'color': color.value,
+      'cameraUrl': cameraUrl,
+      'color': color.toARGB32(),
       'temperature': temperature,
       'lastKnownTemperature': lastKnownTemperature,
       'isOccupied': isOccupied,
@@ -48,10 +86,17 @@ class Room {
 
   // Création d'une pièce à partir des données sauvegardées
   factory Room.fromMap(Map<String, dynamic> map) {
+    final colorValue = map['color'] as int;
     return Room(
       name: map['name'],
       espIp: map['espIp'],
-      color: Color(map['color']),
+      cameraUrl: map['cameraUrl']?.toString() ?? '',
+      color: Color.fromARGB(
+        (colorValue >> 24) & 0xFF,
+        (colorValue >> 16) & 0xFF,
+        (colorValue >> 8) & 0xFF,
+        colorValue & 0xFF,
+      ),
       temperature: map['temperature']?.toDouble() ?? 20.0,
       lastKnownTemperature: map['lastKnownTemperature']?.toDouble() ?? 20.0,
       isOccupied: map['isOccupied'] ?? false,
