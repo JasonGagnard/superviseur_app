@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/room.dart';
 import 'live_thermal_stream.dart';
+import '../screens/room_stats_screen.dart'; // <-- NOUVEAU : Import de l'écran des statistiques
 
 class RoomCard extends StatefulWidget {
   final Room room;
@@ -53,6 +54,24 @@ class _RoomCardState extends State<RoomCard> {
                 ),
                 Row(
                   children: [
+                    // --- NOUVEAU : BOUTON STATISTIQUES ---
+                    InkWell(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => RoomStatsScreen(room: widget.room),
+                          ),
+                        );
+                      },
+                      borderRadius: BorderRadius.circular(20),
+                      child: const Padding(
+                        padding: EdgeInsets.only(right: 6.0),
+                        child: Icon(Icons.bar_chart, color: Colors.blueGrey, size: 22),
+                      ),
+                    ),
+                    // ------------------------------------
+                    
                     if (widget.room.isFroidAlerte)
                       const Icon(Icons.ac_unit, color: Colors.blue, size: 18),
                     if (widget.room.isFroidAlerte) const SizedBox(width: 4),

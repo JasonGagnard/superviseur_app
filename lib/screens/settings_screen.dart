@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'logs_screen.dart'; // Import pour la page des logs
 import 'login_screen.dart'; // Import pour la déconnexion
+import 'consumption_simulator_screen.dart'; // <-- NOUVEAU : Import du simulateur
 
 class SettingsScreen extends StatefulWidget {
-  final String userEmail; // <-- NOUVEAU : On demande l'email pour les logs
+  final String userEmail; 
   
   const SettingsScreen({super.key, required this.userEmail});
 
@@ -24,102 +25,122 @@ class _SettingsScreenState extends State<SettingsScreen> {
         backgroundColor: Colors.blueGrey,
         foregroundColor: Colors.white,
       ),
-      body: Padding(
+      // J'ai passé la Column en ListView pour éviter les problèmes d'écran trop petit
+      // maintenant qu'il y a plus de boutons.
+      body: ListView(
         padding: const EdgeInsets.all(20.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              "Consignes de Température",
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+        children: [
+          const Text(
+            "Consignes de Température",
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 30),
+          
+          // Slider pour Présence Humaine
+          _buildTempSlider(
+            title: "En présence humaine",
+            subtitle: "Température de confort",
+            value: _tempPresence,
+            icon: Icons.person,
+            color: Colors.orange,
+            onChanged: (val) => setState(() => _tempPresence = val),
+          ),
+
+          const SizedBox(height: 30),
+
+          // Slider pour Absence
+          _buildTempSlider(
+            title: "En cas d'absence",
+            subtitle: "Mode éco / hors-gel",
+            value: _tempAbsence,
+            icon: Icons.person_off,
+            color: Colors.blue,
+            onChanged: (val) => setState(() => _tempAbsence = val),
+          ),
+
+          const SizedBox(height: 20),
+          const Divider(),
+
+          // --- NOUVEAU : BOUTON SIMULATEUR D'ÉCONOMIES ---
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const CircleAvatar(
+              backgroundColor: Color(0xFFE8F5E9), // Vert très clair
+              child: Icon(Icons.bolt, color: Colors.green),
             ),
-            const SizedBox(height: 30),
-            
-            // Slider pour Présence Humaine
-            _buildTempSlider(
-              title: "En présence humaine",
-              subtitle: "Température de confort",
-              value: _tempPresence,
-              icon: Icons.person,
-              color: Colors.orange,
-              onChanged: (val) => setState(() => _tempPresence = val),
+            title: const Text("Simulateur d'économies", style: TextStyle(fontWeight: FontWeight.bold)),
+            subtitle: const Text("Estimer l'impact sur la facture"),
+            trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const ConsumptionSimulatorScreen()),
+              );
+            },
+          ),
+          
+          const Divider(),
+
+          // --- BOUTON JOURNAL DES LOGS ---
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const CircleAvatar(
+              backgroundColor: Color(0xFFE3F2FD), // Bleu très clair
+              child: Icon(Icons.receipt_long, color: Colors.blue),
             ),
+            title: const Text("Journal des événements"),
+            subtitle: const Text("Voir l'historique des actions"),
+            trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => LogsScreen(userEmail: widget.userEmail)),
+              );
+            },
+          ),
+          
+          const Divider(),
 
-            const SizedBox(height: 30),
-
-            // Slider pour Absence
-            _buildTempSlider(
-              title: "En cas d'absence",
-              subtitle: "Mode éco / hors-gel",
-              value: _tempAbsence,
-              icon: Icons.person_off,
-              color: Colors.blue,
-              onChanged: (val) => setState(() => _tempAbsence = val),
+          // --- BOUTON DÉCONNEXION ---
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const CircleAvatar(
+              backgroundColor: Color(0xFFFFEBEE), // Rouge très clair
+              child: Icon(Icons.logout, color: Colors.red),
             ),
+            title: const Text("Se déconnecter", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+            onTap: () {
+              // Retourne à la page de connexion et vide l'historique de navigation
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (context) => const LoginScreen()),
+                (route) => false,
+              );
+            },
+          ),
 
-            const SizedBox(height: 20),
-            const Divider(), // Séparateur visuel propre
+          const SizedBox(height: 40), // Espace avant le bouton enregistrer
 
-            // --- BOUTON JOURNAL DES LOGS ---
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const CircleAvatar(
-                backgroundColor: Color(0xFFE3F2FD), // Bleu très clair
-                child: Icon(Icons.receipt_long, color: Colors.blue),
-              ),
-              title: const Text("Journal des événements"),
-              subtitle: const Text("Voir l'historique des actions"),
-              trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => LogsScreen(userEmail: widget.userEmail)),
-                );
-              },
+          // --- BOUTON ENREGISTRER ---
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              minimumSize: const Size.fromHeight(60),
+              backgroundColor: Colors.blueGrey,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
             ),
-            
-            const Divider(),
-
-            // --- BOUTON DÉCONNEXION ---
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const CircleAvatar(
-                backgroundColor: Color(0xFFFFEBEE), // Rouge très clair
-                child: Icon(Icons.logout, color: Colors.red),
-              ),
-              title: const Text("Se déconnecter", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-              onTap: () {
-                // Retourne à la page de connexion et vide l'historique de navigation
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(builder: (context) => const LoginScreen()),
-                  (route) => false,
-                );
-              },
-            ),
-
-            // Le Spacer pousse le bouton "ENREGISTRER" tout en bas de l'écran
-            const Spacer(),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                minimumSize: const Size.fromHeight(60),
-                backgroundColor: Colors.blueGrey,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-              ),
-              onPressed: () {
-                // Ici on enregistrera les données de température plus tard
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text("Configurations enregistrées"),
-                    backgroundColor: Colors.green,
-                  ),
-                );
-                Navigator.pop(context);
-              },
-              child: const Text("ENREGISTRER", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-            )
-          ],
-        ),
+            onPressed: () {
+              // Ici on enregistrera les données de température plus tard
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text("Configurations enregistrées"),
+                  backgroundColor: Colors.green,
+                ),
+              );
+              Navigator.pop(context);
+            },
+            child: const Text("ENREGISTRER", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+          )
+        ],
       ),
     );
   }
