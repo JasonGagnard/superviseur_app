@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'logs_screen.dart'; // Import pour la page des logs
+import 'login_screen.dart'; // Import pour la déconnexion
 
 class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key});
+  final String userEmail; // <-- NOUVEAU : On demande l'email pour les logs
+  
+  const SettingsScreen({super.key, required this.userEmail});
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -41,7 +45,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onChanged: (val) => setState(() => _tempPresence = val),
             ),
 
-            const SizedBox(height: 40),
+            const SizedBox(height: 30),
 
             // Slider pour Absence
             _buildTempSlider(
@@ -53,20 +57,66 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onChanged: (val) => setState(() => _tempAbsence = val),
             ),
 
+            const SizedBox(height: 20),
+            const Divider(), // Séparateur visuel propre
+
+            // --- BOUTON JOURNAL DES LOGS ---
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const CircleAvatar(
+                backgroundColor: Color(0xFFE3F2FD), // Bleu très clair
+                child: Icon(Icons.receipt_long, color: Colors.blue),
+              ),
+              title: const Text("Journal des événements"),
+              subtitle: const Text("Voir l'historique des actions"),
+              trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => LogsScreen(userEmail: widget.userEmail)),
+                );
+              },
+            ),
+            
+            const Divider(),
+
+            // --- BOUTON DÉCONNEXION ---
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const CircleAvatar(
+                backgroundColor: Color(0xFFFFEBEE), // Rouge très clair
+                child: Icon(Icons.logout, color: Colors.red),
+              ),
+              title: const Text("Se déconnecter", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+              onTap: () {
+                // Retourne à la page de connexion et vide l'historique de navigation
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (context) => const LoginScreen()),
+                  (route) => false,
+                );
+              },
+            ),
+
+            // Le Spacer pousse le bouton "ENREGISTRER" tout en bas de l'écran
             const Spacer(),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                 minimumSize: const Size.fromHeight(60),
                 backgroundColor: Colors.blueGrey,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
               ),
               onPressed: () {
-                // Ici on enregistrera les données plus tard
+                // Ici on enregistrera les données de température plus tard
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Configurations enregistrées")),
+                  const SnackBar(
+                    content: Text("Configurations enregistrées"),
+                    backgroundColor: Colors.green,
+                  ),
                 );
                 Navigator.pop(context);
               },
-              child: const Text("ENREGISTRER", style: TextStyle(color: Colors.white)),
+              child: const Text("ENREGISTRER", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
             )
           ],
         ),
@@ -74,6 +124,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  // --- TON WIDGET DE SLIDER INTACT ---
   Widget _buildTempSlider({
     required String title,
     required String subtitle,
