@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/room.dart';
-import '../models/scenario.dart'; // <-- IMPORTANT : Ajout du modèle Scénario
+import '../models/scenario.dart';
 import '../widgets/room_card.dart';
 import 'settings_screen.dart';
 import '../utils/logger.dart';
@@ -17,7 +17,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   List<Room> _rooms = [];
-  List<Scenario> _scenarios = []; // <-- Nouvelle liste pour les scénarios
+  List<Scenario> _scenarios = []; 
 
   final List<String> _allEsps = ["10.105.139.24"];
 
@@ -25,7 +25,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _cameraUrlController = TextEditingController();
 
   String get _storageKeyRooms => 'plan_rooms_${widget.userEmail}';
-  String get _storageKeyScenarios => 'scenarios_${widget.userEmail}'; // <-- Clé pour les scénarios
+  String get _storageKeyScenarios => 'scenarios_${widget.userEmail}';
 
   bool _isScenarioPressed = false;
 
@@ -57,7 +57,6 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  // --- LOGIQUE DE SUPPRESSION DE PIÈCE ---
   void _confirmDelete(int index) {
     showDialog(
       context: context,
@@ -82,26 +81,60 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- NOUVEAU DIALOGUE D'AJOUT DE SCÉNARIO ---
-  void _showAddScenario() {
-    String sName = "";
-    List<String> selectedRooms = [];
-    double selectedTemp = 21.0;
-    
-    // Plage horaire par défaut
-    TimeOfDay startTime = const TimeOfDay(hour: 22, minute: 0);
-    TimeOfDay endTime = const TimeOfDay(hour: 7, minute: 0);
-    
-    IconData selectedIcon = Icons.nights_stay;
-    Color selectedColor = Colors.indigo;
+  // --- LOGIQUE D'ACTIVATION ET RÉSOLUTION DE CONFLITS ---
+  void _toggleScenario(int index) {
+    setState(() {
+      bool targetState = !_scenarios[index].isActive;
 
-    // Grande palette de couleurs variées
+      if (targetState) {
+        // On veut activer le scénario [index]
+        List<String> roomsOfNewScenario = _scenarios[index].roomNames;
+
+        for (var i = 0; i < _scenarios.length; i++) {
+          if (i == index) continue; // Ne pas se comparer à soi-même
+          if (_scenarios[i].isActive) {
+            // Vérifier s'ils partagent des pièces
+            bool hasConflict = _scenarios[i].roomNames.any((room) => roomsOfNewScenario.contains(room));
+            if (hasConflict) {
+              _scenarios[i].isActive = false; // Désactiver l'ancien
+              AppLogger.log(widget.userEmail, "Conflit : Scénario '${_scenarios[i].name}' désactivé.");
+            }
+          }
+        }
+      }
+
+      _scenarios[index].isActive = targetState;
+      _saveData();
+      AppLogger.log(widget.userEmail, "Scénario '${_scenarios[index].name}' ${targetState ? 'activé' : 'désactivé'}.");
+    });
+  }
+
+  // --- DIALOGUE UNIFIÉ : CRÉATION ET ÉDITION DE SCÉNARIO ---
+  void _showScenarioForm([int? index]) {
+    final bool isEditing = index != null;
+    final Scenario? currentScenario = isEditing ? _scenarios[index] : null;
+
+    // Pré-remplissage des données si on édite
+    String sName = currentScenario?.name ?? "";
+    List<String> selectedRooms = currentScenario != null ? List<String>.from(currentScenario.roomNames) : [];
+    double selectedTemp = currentScenario?.targetTemp ?? 21.0;
+    bool useTimeLimit = currentScenario?.useTimeLimit ?? true; 
+    
+    TimeOfDay startTime = currentScenario != null 
+        ? TimeOfDay(hour: currentScenario.startHour, minute: currentScenario.startMinute) 
+        : const TimeOfDay(hour: 22, minute: 0);
+    TimeOfDay endTime = currentScenario != null 
+        ? TimeOfDay(hour: currentScenario.endHour, minute: currentScenario.endMinute) 
+        : const TimeOfDay(hour: 7, minute: 0);
+    
+    IconData selectedIcon = currentScenario != null ? IconData(currentScenario.iconCode, fontFamily: 'MaterialIcons') : Icons.nights_stay;
+    Color selectedColor = currentScenario != null ? Color(currentScenario.colorValue) : Colors.indigo;
+
     final List<Color> palette = [
       Colors.indigo, Colors.teal, Colors.deepPurple, Colors.pink, 
       Colors.amber, Colors.cyan, Colors.brown, Colors.lightGreen
     ];
 
-    // Icônes thématiques
     final Map<String, IconData> iconsMap = {
       "Lune": Icons.nights_stay,
       "Cadenas": Icons.lock,
@@ -116,12 +149,13 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (context) => StatefulBuilder(
         builder: (context, setPopupState) {
           return AlertDialog(
-            title: const Text("Créer un Scénario"),
+            title: Text(isEditing ? "Modifier le Scénario" : "Créer un Scénario"),
             content: SingleChildScrollView(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  TextField(
+                  TextFormField(
+                    initialValue: sName,
                     decoration: const InputDecoration(labelText: "Nom du scénario (ex: Nuit, Vacances...)"),
                     onChanged: (val) => sName = val,
                   ),
@@ -159,26 +193,40 @@ class _HomeScreenState extends State<HomeScreen> {
                   const Divider(height: 30),
                   
                   const Text("2. Plage d'activation", style: TextStyle(fontWeight: FontWeight.bold)),
-                  ListTile(
+                  CheckboxListTile(
                     contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.play_circle_outline, color: Colors.green),
-                    title: const Text("Heure de début"),
-                    trailing: Text(startTime.format(context), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                    onTap: () async {
-                      final time = await showTimePicker(context: context, initialTime: startTime);
-                      if (time != null) setPopupState(() => startTime = time);
-                    },
+                    title: const Text("Définir une plage horaire"),
+                    value: useTimeLimit,
+                    activeColor: selectedColor,
+                    onChanged: (val) => setPopupState(() => useTimeLimit = val!),
                   ),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.stop_circle_outlined, color: Colors.red),
-                    title: const Text("Heure de fin"),
-                    trailing: Text(endTime.format(context), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                    onTap: () async {
-                      final time = await showTimePicker(context: context, initialTime: endTime);
-                      if (time != null) setPopupState(() => endTime = time);
-                    },
-                  ),
+
+                  if (useTimeLimit) ...[
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.play_circle_outline, color: Colors.green),
+                      title: const Text("Heure de début"),
+                      trailing: Text(startTime.format(context), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      onTap: () async {
+                        final time = await showTimePicker(context: context, initialTime: startTime);
+                        if (time != null) setPopupState(() => startTime = time);
+                      },
+                    ),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.stop_circle_outlined, color: Colors.red),
+                      title: const Text("Heure de fin"),
+                      trailing: Text(endTime.format(context), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      onTap: () async {
+                        final time = await showTimePicker(context: context, initialTime: endTime);
+                        if (time != null) setPopupState(() => endTime = time);
+                      },
+                    ),
+                  ] else
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8.0),
+                      child: Text("Le scénario restera actif jusqu'à l'arrêt manuel.", style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey, fontSize: 12)),
+                    ),
 
                   const Divider(height: 30),
 
@@ -206,29 +254,49 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             actions: [
+              if (isEditing)
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      _scenarios.removeAt(index);
+                      _saveData();
+                    });
+                    AppLogger.log(widget.userEmail, "Scénario '$sName' supprimé");
+                    Navigator.pop(context);
+                  }, 
+                  child: const Text("SUPPRIMER", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold))
+                ),
               TextButton(onPressed: () => Navigator.pop(context), child: const Text("Annuler")),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(backgroundColor: selectedColor, foregroundColor: Colors.white),
                 onPressed: () {
                   if (sName.isEmpty) return;
+                  final updatedScenario = Scenario(
+                    name: sName,
+                    iconCode: selectedIcon.codePoint,
+                    colorValue: selectedColor.value,
+                    startHour: startTime.hour,
+                    startMinute: startTime.minute,
+                    endHour: endTime.hour,
+                    endMinute: endTime.minute,
+                    roomNames: selectedRooms,
+                    targetTemp: selectedTemp,
+                    useTimeLimit: useTimeLimit,
+                    isActive: currentScenario?.isActive ?? false,
+                  );
+
                   setState(() {
-                    _scenarios.add(Scenario(
-                      name: sName,
-                      iconCode: selectedIcon.codePoint,
-                      colorValue: selectedColor.value,
-                      startHour: startTime.hour,
-                      startMinute: startTime.minute,
-                      endHour: endTime.hour,
-                      endMinute: endTime.minute,
-                      roomNames: selectedRooms,
-                      targetTemp: selectedTemp,
-                    ));
+                    if (isEditing) {
+                      _scenarios[index] = updatedScenario; 
+                    } else {
+                      _scenarios.add(updatedScenario); 
+                    }
                     _saveData();
                   });
-                  AppLogger.log(widget.userEmail, "Scénario '$sName' créé (${startTime.format(context)} à ${endTime.format(context)})");
+                  AppLogger.log(widget.userEmail, "Scénario '$sName' ${isEditing ? 'modifié' : 'créé'}");
                   Navigator.pop(context);
                 }, 
-                child: const Text("SAUVEGARDER")
+                child: Text(isEditing ? "METTRE À JOUR" : "SAUVEGARDER")
               ),
             ],
           );
@@ -237,7 +305,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- DIALOGUE D'AJOUT DE PIÈCE ---
   void _showAddRoom() {
     _nameController.clear();
     _cameraUrlController.clear();
@@ -326,7 +393,7 @@ class _HomeScreenState extends State<HomeScreen> {
       body: Column(
         children: [
           // ==========================================
-          // 1. LE PLAN D'ARCHITECTE (Prend le maximum de place)
+          // 1. LE PLAN D'ARCHITECTE
           // ==========================================
           Expanded(
             child: _rooms.isEmpty
@@ -353,7 +420,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
 
           // ==========================================
-          // 2. LA BARRE DES SCÉNARIOS (En dessous du plan)
+          // 2. LA BARRE DES SCÉNARIOS
           // ==========================================
           Container(
             width: double.infinity,
@@ -369,7 +436,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Text("Mes Scénarios", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
                 ),
                 SizedBox(
-                  height: 100, // Hauteur de la zone défilante
+                  height: 100,
                   child: _scenarios.isEmpty
                       ? const Center(child: Text("Aucun scénario configuré", style: TextStyle(color: Colors.grey)))
                       : ListView.builder(
@@ -380,20 +447,59 @@ class _HomeScreenState extends State<HomeScreen> {
                             final scenario = _scenarios[index];
                             final color = Color(scenario.colorValue);
                             
-                            return Container(
-                              width: 120,
-                              margin: const EdgeInsets.symmetric(horizontal: 5, vertical: 10),
-                              decoration: BoxDecoration(
-                                color: color.withOpacity(0.15),
-                                borderRadius: BorderRadius.circular(15),
-                                border: Border.all(color: color.withOpacity(0.5), width: 2),
-                              ),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
+                            return GestureDetector(
+                              onTap: () => _toggleScenario(index),
+                              child: Stack(
                                 children: [
-                                  Icon(IconData(scenario.iconCode, fontFamily: 'MaterialIcons'), color: color, size: 28),
-                                  const SizedBox(height: 5),
-                                  Text(scenario.name, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 13), overflow: TextOverflow.ellipsis),
+                                  // LA CARTE DU SCÉNARIO
+                                  AnimatedContainer(
+                                    duration: const Duration(milliseconds: 300),
+                                    width: 120,
+                                    margin: const EdgeInsets.symmetric(horizontal: 5, vertical: 10),
+                                    decoration: BoxDecoration(
+                                      color: scenario.isActive ? color.withOpacity(0.25) : color.withOpacity(0.10),
+                                      borderRadius: BorderRadius.circular(15),
+                                      border: Border.all(
+                                        color: scenario.isActive ? color : color.withOpacity(0.3), 
+                                        width: 1.0 // Bordure fine
+                                      ),
+                                      boxShadow: scenario.isActive ? [
+                                        BoxShadow(color: color.withOpacity(0.4), blurRadius: 8, spreadRadius: 1)
+                                      ] : [],
+                                    ),
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(IconData(scenario.iconCode, fontFamily: 'MaterialIcons'), 
+                                             color: scenario.isActive ? color : color.withOpacity(0.6), 
+                                             size: 28),
+                                        const SizedBox(height: 5),
+                                        Text(scenario.name, 
+                                             style: TextStyle(
+                                               color: scenario.isActive ? color : color.withOpacity(0.6), 
+                                               fontWeight: FontWeight.bold, fontSize: 13), 
+                                             overflow: TextOverflow.ellipsis),
+                                      ],
+                                    ),
+                                  ),
+                                  
+                                  // LE BOUTON D'INFORMATION / ÉDITION
+                                  Positioned(
+                                    top: 12,
+                                    right: 8,
+                                    child: InkWell(
+                                      onTap: () => _showScenarioForm(index), 
+                                      borderRadius: BorderRadius.circular(20),
+                                      child: Container(
+                                        padding: const EdgeInsets.all(2), 
+                                        decoration: BoxDecoration(
+                                          color: Colors.white.withOpacity(0.9),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: Icon(Icons.info_outline, color: color, size: 18),
+                                      ),
+                                    ),
+                                  ),
                                 ],
                               ),
                             );
@@ -406,17 +512,17 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
             
-      // --- LA ZONE DES BOUTONS (Customisée) ---
+      // --- LA ZONE DES BOUTONS FLOTTANTS ---
       floatingActionButton: Column(
         mainAxisAlignment: MainAxisAlignment.end,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          // BOUTON PREMIUM "SCÉNARIO"
+          // BOUTON PREMIUM "AJOUTER SCÉNARIO"
           GestureDetector(
             onTapDown: (_) => setState(() => _isScenarioPressed = true),
             onTapUp: (_) {
               setState(() => _isScenarioPressed = false);
-              _showAddScenario();
+              _showScenarioForm(); 
             },
             onTapCancel: () => setState(() => _isScenarioPressed = false),
             child: AnimatedContainer(
