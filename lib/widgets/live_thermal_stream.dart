@@ -19,14 +19,12 @@ class ThermalFrameStats {
 class LiveThermalStream extends StatefulWidget {
   final String streamUrl;
   final Color accentColor;
-  final bool showLiveBadge;
   final ValueChanged<ThermalFrameStats>? onStats;
 
   const LiveThermalStream({
     super.key,
     required this.streamUrl,
     required this.accentColor,
-    this.showLiveBadge = true,
     this.onStats,
   });
 
@@ -281,98 +279,7 @@ class _LiveThermalStreamState extends State<LiveThermalStream> {
                   : (_errorText ?? 'Aucune trame reçue.'),
             ),
           ),
-        Positioned(
-          top: 10,
-          left: 10,
-          child: _statusChip(_connectionLabel, _connectionColor),
-        ),
-        if (_frame != null)
-          Positioned(
-            left: 12,
-            right: 12,
-            bottom: 12,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                _statusChip(
-                  'Min ${_minTemp?.toStringAsFixed(1) ?? '--'}°C',
-                  widget.accentColor,
-                ),
-                _statusChip(
-                  'Max ${_maxTemp?.toStringAsFixed(1) ?? '--'}°C',
-                  widget.accentColor,
-                ),
-              ],
-            ),
-          ),
-        if (_frame != null)
-          Positioned(
-            left: 12,
-            right: 12,
-            bottom: 52,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                _statusChip('32x24', widget.accentColor.withValues(alpha: 0.7)),
-                _statusChip('1 fps', widget.accentColor.withValues(alpha: 0.7)),
-              ],
-            ),
-          ),
-        if (widget.showLiveBadge)
-          Positioned(
-            top: 10,
-            right: 10,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.55),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: const BoxDecoration(
-                      color: Colors.red,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  const Text(
-                    'EN DIRECT',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 0.6,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
       ],
-    );
-  }
-
-  Widget _statusChip(String label, Color borderColor) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.55),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: borderColor.withValues(alpha: 0.5)),
-      ),
-      child: Text(
-        label,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
     );
   }
 

@@ -1,8 +1,6 @@
-import 'package:flutter/material.dart';
-
 class Scenario {
   String name;
-  int iconCode; 
+  int iconCode;
   int colorValue;
   int startHour;
   int startMinute;

@@ -27,7 +27,6 @@ class _RoomDetailScreenState extends State<RoomDetailScreen> {
               child: LiveThermalStream(
                 streamUrl: widget.room.cameraStreamUrl,
                 accentColor: widget.room.color,
-                showLiveBadge: false,
                 onStats: (stats) {
                   setState(() {
                     _liveStats = stats;
@@ -214,7 +213,8 @@ class _RoomDetailScreenState extends State<RoomDetailScreen> {
                           setState(() {
                             _liveStats = stats;
                             widget.room.temperature = stats.currentTemperature;
-                            widget.room.lastKnownTemperature = stats.currentTemperature;
+                            widget.room.lastKnownTemperature =
+                                stats.currentTemperature;
                           });
                         },
                       ),

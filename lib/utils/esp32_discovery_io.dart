@@ -88,16 +88,6 @@ Future<bool> _probeEsp32Http(String host, Duration timeout) async {
   }
 }
 
-Future<bool> _probeTcpPort(String host, int port, Duration timeout) async {
-  try {
-    final socket = await Socket.connect(host, port, timeout: timeout);
-    socket.destroy();
-    return true;
-  } catch (_) {
-    return false;
-  }
-}
-
 Future<List<String>> _collectIPv4Prefixes() async {
   final interfaces = await NetworkInterface.list(
     includeLoopback: false,
