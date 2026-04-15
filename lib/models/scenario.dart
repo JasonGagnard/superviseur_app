@@ -1,4 +1,5 @@
 class Scenario {
+  int? id;
   String name;
   int iconCode;
   int colorValue;
@@ -12,6 +13,7 @@ class Scenario {
   bool useTimeLimit; // Nouveau : Détermine si on suit l'horloge ou non
 
   Scenario({
+    this.id,
     required this.name,
     required this.iconCode,
     required this.colorValue,
@@ -27,6 +29,7 @@ class Scenario {
 
   Map<String, dynamic> toMap() {
     return {
+      'id': id,
       'name': name,
       'iconCode': iconCode,
       'colorValue': colorValue,
@@ -43,6 +46,7 @@ class Scenario {
 
   factory Scenario.fromMap(Map<String, dynamic> map) {
     return Scenario(
+      id: map['id'] as int?,
       name: map['name'] ?? '',
       iconCode: map['iconCode'] ?? 0,
       colorValue: map['colorValue'] ?? 0xFF000000,
@@ -55,5 +59,47 @@ class Scenario {
       isActive: map['isActive'] ?? false,
       useTimeLimit: map['useTimeLimit'] ?? true,
     );
+  }
+
+  factory Scenario.fromApi(Map<String, dynamic> map) {
+    final espNodes = (map['esp_nodes'] as List<dynamic>? ?? const []);
+    return Scenario(
+      id: map['id'] as int?,
+      name: map['name']?.toString() ?? '',
+      iconCode: (map['icon_code'] as num?)?.toInt() ?? 0,
+      colorValue: (map['color_value'] as num?)?.toInt() ?? 0xFF000000,
+      startHour: (map['start_hour'] as num?)?.toInt() ?? 0,
+      startMinute: (map['start_minute'] as num?)?.toInt() ?? 0,
+      endHour: (map['end_hour'] as num?)?.toInt() ?? 0,
+      endMinute: (map['end_minute'] as num?)?.toInt() ?? 0,
+      roomNames: espNodes
+          .map((node) => (node as Map)['room_name']?.toString())
+          .whereType<String>()
+          .toList(),
+      targetTemp: (map['target_temp'] as num?)?.toDouble() ?? 21.0,
+      isActive: map['is_active'] as bool? ?? false,
+      useTimeLimit: map['use_time_limit'] as bool? ?? true,
+    );
+  }
+
+  Map<String, dynamic> toApiPayload({
+    required String username,
+    required List<int> espNodeIds,
+  }) {
+    return {
+      'username': username,
+      'name': name,
+      'description': name,
+      'is_active': isActive,
+      'icon_code': iconCode,
+      'color_value': colorValue,
+      'start_hour': startHour,
+      'start_minute': startMinute,
+      'end_hour': endHour,
+      'end_minute': endMinute,
+      'target_temp': targetTemp,
+      'use_time_limit': useTimeLimit,
+      'esp_node_ids': espNodeIds,
+    };
   }
 }

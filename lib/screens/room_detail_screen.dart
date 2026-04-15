@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/room.dart';
 import '../widgets/live_thermal_stream.dart';
+import '../services/backend_api.dart';
 
 class RoomDetailScreen extends StatefulWidget {
   final Room room;
@@ -12,6 +13,21 @@ class RoomDetailScreen extends StatefulWidget {
 
 class _RoomDetailScreenState extends State<RoomDetailScreen> {
   ThermalFrameStats? _liveStats;
+
+  Future<void> _syncRoomDisplayPrefs() async {
+    if (widget.room.id == null) {
+      return;
+    }
+
+    try {
+      await BackendApi.instance.updateEspNode(widget.room.id!, {
+        'show_temperature': widget.room.showTemperature,
+        'show_presence': widget.room.showPresence,
+      });
+    } catch (_) {
+      // Ignore API failure to keep detail interactions smooth.
+    }
+  }
 
   String _formatTemperature(double value) => '${value.toStringAsFixed(1)}°C';
 
@@ -156,16 +172,20 @@ class _RoomDetailScreenState extends State<RoomDetailScreen> {
               title: const Text("Afficher la température"),
               secondary: const Icon(Icons.thermostat, color: Colors.orange),
               value: widget.room.showTemperature,
-              onChanged: (val) =>
-                  setState(() => widget.room.showTemperature = val),
+              onChanged: (val) {
+                setState(() => widget.room.showTemperature = val);
+                _syncRoomDisplayPrefs();
+              },
             ),
 
             SwitchListTile(
               title: const Text("Afficher la présence"),
               secondary: const Icon(Icons.person, color: Colors.blue),
               value: widget.room.showPresence,
-              onChanged: (val) =>
-                  setState(() => widget.room.showPresence = val),
+              onChanged: (val) {
+                setState(() => widget.room.showPresence = val);
+                _syncRoomDisplayPrefs();
+              },
             ),
 
             const Divider(height: 40),

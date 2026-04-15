@@ -1,13 +1,11 @@
-import 'dart:convert';
 import 'profile_screen.dart';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../models/room.dart';
 import '../models/scenario.dart';
 import '../widgets/room_card.dart';
 import 'settings_screen.dart';
 import '../utils/logger.dart';
-import '../utils/esp32_discovery.dart';
+import '../services/backend_api.dart';
 
 class HomeScreen extends StatefulWidget {
   final String userEmail;
@@ -20,6 +18,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   List<Room> _rooms = [];
   List<Scenario> _scenarios = [];
+  bool _isLoadingData = true;
 
   final List<String> _discoveredEsps = [];
   final List<String> _knownEspCandidates = ['10.105.139.24'];
@@ -29,9 +28,6 @@ class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _cameraUrlController = TextEditingController();
 
-  String get _storageKeyRooms => 'plan_rooms_${widget.userEmail}';
-  String get _storageKeyScenarios => 'scenarios_${widget.userEmail}';
-
   @override
   void initState() {
     super.initState();
@@ -40,36 +36,50 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  // --- PERSISTANCE DES DONNÉES ---
-  Future<void> _saveData() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      _storageKeyRooms,
-      json.encode(_rooms.map((r) => r.toMap()).toList()),
-    );
-    await prefs.setString(
-      _storageKeyScenarios,
-      json.encode(_scenarios.map((s) => s.toMap()).toList()),
-    );
+  Future<void> _loadData() async {
+    setState(() => _isLoadingData = true);
+    try {
+      final roomsData = await BackendApi.instance.listEspNodes(widget.userEmail);
+      final scenariosData = await BackendApi.instance.listScenarios(widget.userEmail);
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _rooms = roomsData.map(Room.fromApi).toList();
+        _scenarios = scenariosData.map(Scenario.fromApi).toList();
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Impossible de charger les donnees backend.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingData = false);
+      }
+    }
   }
 
-  Future<void> _loadData() async {
-    final prefs = await SharedPreferences.getInstance();
-    final String? rData = prefs.getString(_storageKeyRooms);
-    final String? sData = prefs.getString(_storageKeyScenarios);
+  Future<void> _persistRoomPosition(Room room) async {
+    if (room.id == null) {
+      return;
+    }
 
-    setState(() {
-      if (rData != null) {
-        _rooms = (json.decode(rData) as List)
-            .map((item) => Room.fromMap(item))
-            .toList();
-      }
-      if (sData != null) {
-        _scenarios = (json.decode(sData) as List)
-            .map((item) => Scenario.fromMap(item))
-            .toList();
-      }
-    });
+    try {
+      await BackendApi.instance.updateEspNode(room.id!, {
+        'pos_x': room.x,
+        'pos_y': room.y,
+      });
+    } catch (_) {
+      // Ignore sync error here to keep drag interaction smooth.
+    }
   }
 
   List<String> get _availableEspHosts {
@@ -86,10 +96,23 @@ class _HomeScreenState extends State<HomeScreen> {
       _networkStatusMessage = 'Analyse du Wi-Fi en cours...';
     });
 
-    final discoveredHost = await discoverEsp32OnLocalNetwork(
-      preferredHosts: _availableEspHosts,
-      extraCandidates: _knownEspCandidates,
-    );
+    List<String> discoveredHosts = const [];
+    try {
+      final scanResponse = await BackendApi.instance.scanEsp32OnBackend(
+        preferredHosts: _availableEspHosts,
+        extraCandidates: _knownEspCandidates,
+        timeoutMs: 1500,
+        maxResults: 10,
+        scanFullSubnet: true,
+      );
+
+      discoveredHosts = (scanResponse['discovered_hosts'] as List<dynamic>? ?? const [])
+          .map((host) => host.toString())
+          .where((host) => host.trim().isNotEmpty)
+          .toList();
+    } catch (_) {
+      discoveredHosts = const [];
+    }
 
     if (!mounted) {
       return;
@@ -97,13 +120,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
     setState(() {
       _isScanningEsp32 = false;
-      if (discoveredHost != null) {
-        if (!_discoveredEsps.contains(discoveredHost)) {
-          _discoveredEsps
-            ..clear()
-            ..add(discoveredHost);
+      if (discoveredHosts.isNotEmpty) {
+        _discoveredEsps
+          ..clear()
+          ..addAll(discoveredHosts);
+        if (discoveredHosts.length == 1) {
+          _networkStatusMessage = 'ESP32 détecté sur ${discoveredHosts.first}';
+        } else {
+          _networkStatusMessage = '${discoveredHosts.length} ESP32 détectés (${discoveredHosts.join(', ')})';
         }
-        _networkStatusMessage = 'ESP32 détecté sur $discoveredHost';
       } else {
         _discoveredEsps.clear();
         _networkStatusMessage = 'Aucun ESP32 détecté sur le réseau actuel';
@@ -130,12 +155,29 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () {
+            onPressed: () async {
+              final room = _rooms[index];
+              if (room.id != null) {
+                try {
+                  await BackendApi.instance.deleteEspNode(room.id!);
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(e.toString())),
+                    );
+                  }
+                  return;
+                }
+              }
+
+              if (!mounted) {
+                return;
+              }
+
               setState(() {
                 _rooms.removeAt(index);
-                _saveData();
               });
-              Navigator.pop(c);
+              Navigator.of(context).pop();
             },
             child: const Text(
               "OUI, SUPPRIMER",
@@ -148,37 +190,56 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // --- LOGIQUE D'ACTIVATION ET RÉSOLUTION DE CONFLITS ---
-  void _toggleScenario(int index) {
-    setState(() {
-      bool targetState = !_scenarios[index].isActive;
+  Future<void> _toggleScenario(int index) async {
+    final selected = _scenarios[index];
+    if (selected.id == null) {
+      return;
+    }
 
+    final targetState = !selected.isActive;
+
+    try {
       if (targetState) {
-        List<String> roomsOfNewScenario = _scenarios[index].roomNames;
-
+        final selectedRooms = selected.roomNames;
         for (var i = 0; i < _scenarios.length; i++) {
-          if (i == index) continue; 
-          if (_scenarios[i].isActive) {
-            bool hasConflict = _scenarios[i].roomNames.any(
-              (room) => roomsOfNewScenario.contains(room),
+          if (i == index) {
+            continue;
+          }
+
+          final current = _scenarios[i];
+          final hasConflict = current.isActive &&
+              current.roomNames.any((room) => selectedRooms.contains(room));
+
+          if (hasConflict && current.id != null) {
+            await BackendApi.instance.updateScenario(current.id!, {
+              'is_active': false,
+            });
+            AppLogger.log(
+              widget.userEmail,
+              "Conflit : Scénario '${current.name}' désactivé.",
             );
-            if (hasConflict) {
-              _scenarios[i].isActive = false; 
-              AppLogger.log(
-                widget.userEmail,
-                "Conflit : Scénario '${_scenarios[i].name}' désactivé.",
-              );
-            }
           }
         }
       }
 
-      _scenarios[index].isActive = targetState;
-      _saveData();
+      await BackendApi.instance.updateScenario(selected.id!, {
+        'is_active': targetState,
+      });
+
       AppLogger.log(
         widget.userEmail,
-        "Scénario '${_scenarios[index].name}' ${targetState ? 'activé' : 'désactivé'}.",
+        "Scénario '${selected.name}' ${targetState ? 'activé' : 'désactivé'}.",
       );
-    });
+
+      await _loadData();
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString())),
+      );
+    }
   }
 
   // --- DIALOGUE UNIFIÉ : CRÉATION ET ÉDITION DE SCÉNARIO ---
@@ -437,16 +498,30 @@ class _HomeScreenState extends State<HomeScreen> {
             actions: [
               if (isEditing)
                 TextButton(
-                  onPressed: () {
-                    setState(() {
-                      _scenarios.removeAt(index);
-                      _saveData();
-                    });
+                  onPressed: () async {
+                    final scenario = _scenarios[index];
+                    if (scenario.id != null) {
+                      try {
+                        await BackendApi.instance.deleteScenario(scenario.id!);
+                      } catch (e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(this.context).showSnackBar(
+                            SnackBar(content: Text(e.toString())),
+                          );
+                        }
+                        return;
+                      }
+                    }
+
+                    await _loadData();
                     AppLogger.log(
                       widget.userEmail,
                       "Scénario '$sName' supprimé",
                     );
-                    Navigator.pop(context);
+                    if (!mounted) {
+                      return;
+                    }
+                    Navigator.of(this.context).pop();
                   },
                   child: const Text(
                     "SUPPRIMER",
@@ -465,12 +540,13 @@ class _HomeScreenState extends State<HomeScreen> {
                   backgroundColor: selectedColor,
                   foregroundColor: Colors.white,
                 ),
-                onPressed: () {
+                onPressed: () async {
                   if (sName.isEmpty) return;
                   final updatedScenario = Scenario(
+                    id: currentScenario?.id,
                     name: sName,
                     iconCode: selectedIcon.codePoint,
-                    colorValue: selectedColor.value,
+                    colorValue: selectedColor.toARGB32(),
                     startHour: startTime.hour,
                     startMinute: startTime.minute,
                     endHour: endTime.hour,
@@ -481,19 +557,45 @@ class _HomeScreenState extends State<HomeScreen> {
                     isActive: currentScenario?.isActive ?? false,
                   );
 
-                  setState(() {
-                    if (isEditing) {
-                      _scenarios[index] = updatedScenario;
+                  final selectedNodeIds = _rooms
+                      .where((room) => selectedRooms.contains(room.name))
+                      .map((room) => room.id)
+                      .whereType<int>()
+                      .toList();
+
+                  final payload = updatedScenario.toApiPayload(
+                    username: widget.userEmail,
+                    espNodeIds: selectedNodeIds,
+                  );
+
+                  try {
+                    if (isEditing && updatedScenario.id != null) {
+                      await BackendApi.instance.updateScenario(
+                        updatedScenario.id!,
+                        payload,
+                      );
                     } else {
-                      _scenarios.add(updatedScenario);
+                      await BackendApi.instance.createScenario(payload);
                     }
-                    _saveData();
-                  });
+                  } catch (e) {
+                    if (!mounted) {
+                      return;
+                    }
+                    ScaffoldMessenger.of(this.context).showSnackBar(
+                      SnackBar(content: Text(e.toString())),
+                    );
+                    return;
+                  }
+
+                  await _loadData();
                   AppLogger.log(
                     widget.userEmail,
                     "Scénario '$sName' ${isEditing ? 'modifié' : 'créé'}",
                   );
-                  Navigator.pop(context);
+                  if (!mounted) {
+                    return;
+                  }
+                  Navigator.of(this.context).pop();
                 },
                 child: Text(isEditing ? "METTRE À JOUR" : "SAUVEGARDER"),
               ),
@@ -623,24 +725,37 @@ class _HomeScreenState extends State<HomeScreen> {
               ElevatedButton(
                 onPressed: (selEsp == null || _nameController.text.isEmpty)
                     ? null
-                    : () {
+                    : () async {
                         final streamUrl =
                             _cameraUrlController.text.trim().isEmpty
                             ? 'ws://$selEsp:81/'
                             : _cameraUrlController.text.trim();
-                        setState(() {
-                          _rooms.add(
-                            Room(
-                              name: _nameController.text,
-                              espIp: selEsp!,
-                              cameraUrl: hasCamera ? streamUrl : '', 
-                              color: selColor,
-                              hasCamera: hasCamera, 
-                            ),
-                          );
-                          _saveData();
-                        });
-                        Navigator.pop(context);
+
+                        try {
+                          await BackendApi.instance.createEspNode({
+                            'username': widget.userEmail,
+                            'ip_address': selEsp,
+                            'room_name': _nameController.text.trim(),
+                            'camera_url': hasCamera ? streamUrl : '',
+                            'color_hex': '#${selColor.toARGB32().toRadixString(16).padLeft(8, '0')}',
+                            'has_camera': hasCamera,
+                            'show_temperature': true,
+                            'show_presence': true,
+                          });
+                        } catch (e) {
+                          if (mounted) {
+                            ScaffoldMessenger.of(this.context).showSnackBar(
+                              SnackBar(content: Text(e.toString())),
+                            );
+                          }
+                          return;
+                        }
+
+                        await _loadData();
+                        if (!mounted) {
+                          return;
+                        }
+                        Navigator.of(this.context).pop();
                       },
                 child: const Text("AJOUTER"),
               ),
@@ -745,7 +860,9 @@ class _HomeScreenState extends State<HomeScreen> {
           // 1. LE PLAN D'ARCHITECTE
           // ==========================================
           Expanded(
-            child: _rooms.isEmpty
+            child: _isLoadingData
+                ? const Center(child: CircularProgressIndicator())
+                : _rooms.isEmpty
                 ? const Center(
                     child: Text(
                       "Plan vide.\nAppuyez sur le bouton pour ajouter une pièce.",
@@ -765,7 +882,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             room.x += details.delta.dx;
                             room.y += details.delta.dy;
                           }),
-                          onPanEnd: (details) => _saveData(),
+                          onPanEnd: (details) => _persistRoomPosition(room),
                           child: SizedBox(
                             width: 240,
                             height: 180,

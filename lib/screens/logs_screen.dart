@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/backend_api.dart';
 
 // --- MODÈLE DE DONNÉES POUR LES LOGS ---
 enum LogType { user, system }
@@ -9,6 +10,18 @@ class LogEntry {
   final LogType type;
 
   LogEntry({required this.timestamp, required this.message, required this.type});
+
+  factory LogEntry.fromApi(Map<String, dynamic> map) {
+    final rawType = map['log_type']?.toString() ?? 'system';
+    final parsedType = rawType == 'user' ? LogType.user : LogType.system;
+    final createdAt = DateTime.tryParse(map['created_at']?.toString() ?? '');
+
+    return LogEntry(
+      timestamp: createdAt ?? DateTime.now(),
+      message: map['action_log']?.toString() ?? '',
+      type: parsedType,
+    );
+  }
 }
 
 class LogsScreen extends StatefulWidget {
@@ -23,22 +36,50 @@ class _LogsScreenState extends State<LogsScreen> {
   // Le type actuellement sélectionné par le switch (Par défaut: Utilisateur)
   LogType _selectedType = LogType.user;
 
-  // --- FAUSSES DONNÉES (Pour tester le design) ---
-  // Remplace ceci plus tard par la lecture de tes vrais logs via SharedPreferences
-  final List<LogEntry> _allLogs = [
-    LogEntry(timestamp: DateTime.now().subtract(const Duration(minutes: 5)), message: "Scénario 'Nuit' activé", type: LogType.user),
-    LogEntry(timestamp: DateTime.now().subtract(const Duration(minutes: 6)), message: "Connexion ESP32 (10.105.139.24) rétablie", type: LogType.system),
-    LogEntry(timestamp: DateTime.now().subtract(const Duration(minutes: 45)), message: "Présence détectée dans le Salon", type: LogType.user),
-    LogEntry(timestamp: DateTime.now().subtract(const Duration(minutes: 60)), message: "Perte de signal caméra (Cuisine)", type: LogType.system),
-    LogEntry(timestamp: DateTime.now().subtract(const Duration(hours: 2)), message: "Température 'Chambre' modifiée à 19°C", type: LogType.user),
-    LogEntry(timestamp: DateTime.now().subtract(const Duration(hours: 3)), message: "Redémarrage de l'application SACHA", type: LogType.system),
-    LogEntry(timestamp: DateTime.now().subtract(const Duration(hours: 5)), message: "Pièce 'Salle de bain' ajoutée au plan", type: LogType.user),
-  ];
+  bool _isLoading = true;
+  List<LogEntry> _allLogs = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadLogs();
+  }
+
+  Future<void> _loadLogs() async {
+    setState(() => _isLoading = true);
+
+    try {
+      final logType = _selectedType == LogType.user ? 'user' : 'system';
+      final response = await BackendApi.instance.listLogs(
+        username: widget.userEmail,
+        logType: logType,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _allLogs = response.map(LogEntry.fromApi).toList();
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _allLogs = [];
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    // On filtre la liste en fonction du bouton sélectionné
-    List<LogEntry> filteredLogs = _allLogs.where((log) => log.type == _selectedType).toList();
+    // Le backend renvoie deja le type filtre.
+    List<LogEntry> filteredLogs = _allLogs;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF0F2F5),
@@ -88,7 +129,10 @@ class _LogsScreenState extends State<LogsScreen> {
                     children: [
                       Expanded(
                         child: GestureDetector(
-                          onTap: () => setState(() => _selectedType = LogType.user),
+                          onTap: () {
+                            setState(() => _selectedType = LogType.user);
+                            _loadLogs();
+                          },
                           behavior: HitTestBehavior.opaque,
                           child: Center(
                             child: AnimatedDefaultTextStyle(
@@ -105,7 +149,10 @@ class _LogsScreenState extends State<LogsScreen> {
                       ),
                       Expanded(
                         child: GestureDetector(
-                          onTap: () => setState(() => _selectedType = LogType.system),
+                          onTap: () {
+                            setState(() => _selectedType = LogType.system);
+                            _loadLogs();
+                          },
                           behavior: HitTestBehavior.opaque,
                           child: Center(
                             child: AnimatedDefaultTextStyle(
@@ -131,7 +178,9 @@ class _LogsScreenState extends State<LogsScreen> {
           // 2. LA LISTE DES LOGS FILTRÉS
           // ==========================================
           Expanded(
-            child: filteredLogs.isEmpty
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : filteredLogs.isEmpty
                 ? const Center(
                     child: Text("Aucun événement dans cette catégorie.", style: TextStyle(color: Colors.grey)),
                   )

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../models/room.dart';
+import '../services/backend_api.dart';
 
 class RoomStatsScreen extends StatefulWidget {
   final Room room;
@@ -12,23 +13,76 @@ class RoomStatsScreen extends StatefulWidget {
 
 class _RoomStatsScreenState extends State<RoomStatsScreen> {
   String _timeframe = 'Jour'; // Peut être 'Jour', 'Semaine', 'Mois'
+  bool _isLoading = true;
+  List<FlSpot> _spots = [];
 
-  // Générateur de fausses données pour l'exemple
-  List<FlSpot> _getDummyData() {
-    if (_timeframe == 'Jour') {
-      return const [
-        FlSpot(0, 18), FlSpot(4, 17.5), FlSpot(8, 20), 
-        FlSpot(12, 22), FlSpot(16, 21.5), FlSpot(20, 21), FlSpot(24, 19)
-      ];
-    } else if (_timeframe == 'Semaine') {
-      return const [
-        FlSpot(1, 20), FlSpot(2, 21), FlSpot(3, 19), 
-        FlSpot(4, 22), FlSpot(5, 22.5), FlSpot(6, 20), FlSpot(7, 21)
-      ];
-    } else {
-      return const [
-        FlSpot(1, 19), FlSpot(2, 20.5), FlSpot(3, 21), FlSpot(4, 18.5)
-      ];
+  @override
+  void initState() {
+    super.initState();
+    _loadTemperatures();
+  }
+
+  Future<void> _loadTemperatures() async {
+    if (widget.room.id == null) {
+      setState(() {
+        _spots = [];
+        _isLoading = false;
+      });
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final rows = await BackendApi.instance.listTemperatures(
+        espNodeId: widget.room.id!,
+      );
+      final now = DateTime.now();
+      final filtered = rows.where((row) {
+        final measuredAt = DateTime.tryParse(row['measured_at']?.toString() ?? '');
+        if (measuredAt == null) {
+          return false;
+        }
+        if (_timeframe == 'Jour') {
+          return now.difference(measuredAt).inHours <= 24;
+        }
+        if (_timeframe == 'Semaine') {
+          return now.difference(measuredAt).inDays <= 7;
+        }
+        return now.difference(measuredAt).inDays <= 30;
+      }).toList()
+        ..sort((a, b) {
+          final aTime = DateTime.tryParse(a['measured_at']?.toString() ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
+          final bTime = DateTime.tryParse(b['measured_at']?.toString() ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
+          return aTime.compareTo(bTime);
+        });
+
+      final spots = <FlSpot>[];
+      for (var i = 0; i < filtered.length; i++) {
+        final temp = (filtered[i]['temperature'] as num?)?.toDouble();
+        if (temp != null) {
+          spots.add(FlSpot(i.toDouble(), temp));
+        }
+      }
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _spots = spots;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _spots = [];
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -58,7 +112,10 @@ class _RoomStatsScreenState extends State<RoomStatsScreen> {
                   final isSelected = _timeframe == period;
                   return Expanded(
                     child: GestureDetector(
-                      onTap: () => setState(() => _timeframe = period),
+                      onTap: () {
+                        setState(() => _timeframe = period);
+                        _loadTemperatures();
+                      },
                       child: Container(
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         decoration: BoxDecoration(
@@ -93,8 +150,17 @@ class _RoomStatsScreenState extends State<RoomStatsScreen> {
                     BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, 5))
                   ],
                 ),
-                child: LineChart(
-                  LineChartData(
+                child: _isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : _spots.isEmpty
+                    ? const Center(
+                        child: Text(
+                          'Aucune temperature disponible',
+                          style: TextStyle(color: Colors.black54),
+                        ),
+                      )
+                    : LineChart(
+                        LineChartData(
                     gridData: FlGridData(
                       show: true, 
                       drawVerticalLine: false, 
@@ -144,7 +210,7 @@ class _RoomStatsScreenState extends State<RoomStatsScreen> {
                     borderData: FlBorderData(show: false),
                     lineBarsData: [
                       LineChartBarData(
-                        spots: _getDummyData(),
+                        spots: _spots,
                         isCurved: true,
                         color: widget.room.color, 
                         barWidth: 4,

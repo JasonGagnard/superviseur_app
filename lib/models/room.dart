@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 class Room {
+  final int? id;
   String name;
   final String espIp;
   final String cameraUrl;
@@ -18,6 +19,7 @@ class Room {
   double y;
 
   Room({
+    this.id,
     required this.name,
     required this.espIp,
     this.cameraUrl = '',
@@ -71,6 +73,7 @@ class Room {
   // Transformation en JSON pour la sauvegarde
   Map<String, dynamic> toMap() {
     return {
+      'id': id,
       'name': name,
       'espIp': espIp,
       'cameraUrl': cameraUrl,
@@ -91,6 +94,7 @@ class Room {
   factory Room.fromMap(Map<String, dynamic> map) {
     final colorValue = map['color'] as int;
     return Room(
+      id: map['id'] as int?,
       name: map['name'],
       espIp: map['espIp'],
       cameraUrl: map['cameraUrl']?.toString() ?? '',
@@ -110,5 +114,53 @@ class Room {
       x: map['x']?.toDouble() ?? 50.0,
       y: map['y']?.toDouble() ?? 50.0,
     );
+  }
+
+  factory Room.fromApi(Map<String, dynamic> map) {
+    final colorHex = map['color_hex']?.toString();
+    final colorValue = _parseColorHex(colorHex) ?? 0xFF42A5F5;
+
+    return Room(
+      id: map['id'] as int?,
+      name: map['room_name']?.toString() ?? 'Piece',
+      espIp: map['ip_address']?.toString() ?? '',
+      cameraUrl: map['camera_url']?.toString() ?? '',
+      color: Color(colorValue),
+      showTemperature: map['show_temperature'] as bool? ?? true,
+      showPresence: map['show_presence'] as bool? ?? true,
+      hasCamera: map['has_camera'] as bool? ?? true,
+      x: (map['pos_x'] as num?)?.toDouble() ?? 50.0,
+      y: (map['pos_y'] as num?)?.toDouble() ?? 50.0,
+    );
+  }
+
+  Map<String, dynamic> toApiPayload({required String username}) {
+    return {
+      'username': username,
+      'ip_address': espIp,
+      'room_name': name,
+      'camera_url': cameraUrl,
+      'color_hex': '#${color.toARGB32().toRadixString(16).padLeft(8, '0')}',
+      'pos_x': x,
+      'pos_y': y,
+      'has_camera': hasCamera,
+      'show_temperature': showTemperature,
+      'show_presence': showPresence,
+    };
+  }
+
+  static int? _parseColorHex(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return null;
+    }
+
+    final normalized = value.trim().replaceFirst('#', '');
+    if (normalized.length == 6) {
+      return int.tryParse('FF$normalized', radix: 16);
+    }
+    if (normalized.length == 8) {
+      return int.tryParse(normalized, radix: 16);
+    }
+    return null;
   }
 }

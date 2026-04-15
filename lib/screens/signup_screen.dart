@@ -1,7 +1,7 @@
 import 'dart:io'; // <-- NOUVEAU
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart'; // <-- NOUVEAU
-import '../utils/mock_db.dart';
+import '../services/backend_api.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
@@ -12,6 +12,7 @@ class SignUpScreen extends StatefulWidget {
 
 class _SignUpScreenState extends State<SignUpScreen> {
   bool _isObscured = true;
+  bool _isLoading = false;
   final _usernameController = TextEditingController();
   final _firstNameController = TextEditingController(); // <-- NOUVEAU
   final _lastNameController = TextEditingController(); // <-- NOUVEAU
@@ -59,7 +60,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
     }
   }
 
-  void _handleSignUp() {
+  Future<void> _handleSignUp() async {
     final username = _usernameController.text.trim();
     final firstName = _firstNameController.text.trim(); // <-- NOUVEAU
     final lastName = _lastNameController.text.trim(); // <-- NOUVEAU
@@ -72,29 +73,38 @@ class _SignUpScreenState extends State<SignUpScreen> {
       return;
     }
 
-    if (MockDB.users.containsKey(username)) {
-      _showMsg("Ce nom d'utilisateur est déjà pris", Colors.orange);
-      return;
+    setState(() => _isLoading = true);
+
+    try {
+      await BackendApi.instance.signup(
+        username: username,
+        firstName: firstName,
+        lastName: lastName,
+        email: email,
+        password: pass,
+        profileImagePath: _imageFile?.path,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      _showMsg("Compte créé avec succès !", Colors.green);
+      Future.delayed(const Duration(seconds: 1), () {
+        if (mounted) {
+          Navigator.pop(context);
+        }
+      });
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      _showMsg(e.toString(), Colors.redAccent);
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
-
-    // --- MISE À JOUR SAUVEGARDE : Ajout des infos dans MockDB ---
-    setState(() {
-      MockDB.users[username] = {
-        'firstName': firstName, // <-- SAUVEGARDE
-        'lastName': lastName,   // <-- SAUVEGARDE
-        'email': email,
-        'password': pass,
-        // On stocke le chemin de l'image si elle existe
-        'profileImagePath': _imageFile?.path, // <-- SAUVEGARDE
-        'isValidated': true,
-      };
-    });
-
-    _showMsg("Compte créé avec succès !", Colors.green);
-    
-    Future.delayed(const Duration(seconds: 1), () {
-      if (mounted) Navigator.pop(context);
-    });
   }
 
   void _showMsg(String m, Color c) => ScaffoldMessenger.of(context).showSnackBar(
@@ -206,12 +216,21 @@ class _SignUpScreenState extends State<SignUpScreen> {
               SizedBox(
                 width: double.infinity, height: 50,
                 child: ElevatedButton(
-                  onPressed: _handleSignUp,
+                  onPressed: _isLoading ? null : _handleSignUp,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF00B0FF), 
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25))
                   ),
-                  child: const Text("S'INSCRIRE", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  child: _isLoading
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : const Text("S'INSCRIRE", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                 ),
               ),
               const SizedBox(height: 30), 

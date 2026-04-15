@@ -1,7 +1,7 @@
 import 'dart:io'; // <-- NOUVEAU
 import 'package:flutter/material.dart';
 import 'login_screen.dart';
-import '../utils/mock_db.dart'; // <-- Import de ta base Mock
+import '../services/backend_api.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String username;
@@ -32,20 +32,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _loadUserInfo() async {
-    // --- MISE À JOUR LECTURE : On va chercher les infos dans MockDB ---
-    if (MockDB.users.containsKey(widget.username)) {
-      final userData = MockDB.users[widget.username]!;
-      
-      final String firstName = userData['firstName'] ?? "";
-      final String lastName = userData['lastName'] ?? "";
+    try {
+      final userData = await BackendApi.instance.getUser(widget.username);
+
+      final String firstName = userData['first_name']?.toString() ?? "";
+      final String lastName = userData['last_name']?.toString() ?? "";
+
+      if (!mounted) {
+        return;
+      }
 
       setState(() {
-        _userEmail = userData['email'] ?? "Email non renseigné";
-        // On construit le nom d'affichage propre
+        _userEmail = userData['email']?.toString() ?? "Email non renseigné";
         _displayName = "$firstName $lastName".trim();
-        _profileImagePath = userData['profileImagePath']; // Chemin de l'image
+        _profileImagePath = userData['profile_image_path']?.toString();
       });
-    } else {
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
       setState(() {
         _userEmail = "Utilisateur inconnu";
         _displayName = widget.username;

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'home_screen.dart';
 import 'signup_screen.dart';
-import '../utils/mock_db.dart';
+import '../services/backend_api.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -12,15 +12,35 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   bool _isObscured = true;
+  bool _isLoading = false;
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
 
-  void _handleSignIn() {
+  Future<void> _handleSignIn() async {
     final email = _emailController.text.trim();
     final pass = _passwordController.text.trim();
 
-    if (MockDB.users.containsKey(email) && MockDB.users[email]!['password'] == pass) {
-      if (MockDB.users[email]!['isValidated'] == true) {
+    if (email.isEmpty || pass.isEmpty) {
+      _showMsg("Veuillez remplir les champs", Colors.redAccent);
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final response = await BackendApi.instance.login(
+        username: email,
+        password: pass,
+      );
+
+      final user = response['user'] as Map<String, dynamic>?;
+      final isValidated = user?['is_validated'] as bool? ?? false;
+
+      if (!mounted) {
+        return;
+      }
+
+      if (isValidated) {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => HomeScreen(userEmail: email)),
@@ -28,8 +48,15 @@ class _LoginScreenState extends State<LoginScreen> {
       } else {
         _showMsg("Compte non validé. Vérifiez vos emails.", Colors.orange);
       }
-    } else {
-      _showMsg("Identifiants incorrects", Colors.redAccent);
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      _showMsg(e.toString(), Colors.redAccent);
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -61,9 +88,18 @@ class _LoginScreenState extends State<LoginScreen> {
               SizedBox(
                 width: double.infinity, height: 50,
                 child: ElevatedButton(
-                  onPressed: _handleSignIn,
+                  onPressed: _isLoading ? null : _handleSignIn,
                   style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00B0FF), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25))),
-                  child: const Text("SE CONNECTER", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  child: _isLoading
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : const Text("SE CONNECTER", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                 ),
               ),
               TextButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (c) => const SignUpScreen())), child: const Text("Créer un compte SACHA")),
