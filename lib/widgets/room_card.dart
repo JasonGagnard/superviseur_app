@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import '../models/room.dart';
 import 'live_thermal_stream.dart';
-import '../screens/room_stats_screen.dart'; // <-- NOUVEAU : Import de l'écran des statistiques
+import '../screens/room_stats_screen.dart';
+import '../utils/notification_service.dart'; // <-- NOUVEAU : Le service de notifications
 
 class RoomCard extends StatefulWidget {
   final Room room;
@@ -15,6 +16,7 @@ class RoomCard extends StatefulWidget {
 
 class _RoomCardState extends State<RoomCard> {
   ThermalFrameStats? _liveStats;
+  DateTime? _lastAlertTime; // <-- NOUVEAU : Mémoire de la dernière alerte
 
   String _formatTemperature(double value) => '${value.toStringAsFixed(1)}°C';
 
@@ -54,7 +56,6 @@ class _RoomCardState extends State<RoomCard> {
                 ),
                 Row(
                   children: [
-                    // --- NOUVEAU : BOUTON STATISTIQUES ---
                     InkWell(
                       onTap: () {
                         Navigator.push(
@@ -70,8 +71,6 @@ class _RoomCardState extends State<RoomCard> {
                         child: Icon(Icons.bar_chart, color: Colors.blueGrey, size: 22),
                       ),
                     ),
-                    // ------------------------------------
-                    
                     if (widget.room.isFroidAlerte)
                       const Icon(Icons.ac_unit, color: Colors.blue, size: 18),
                     if (widget.room.isFroidAlerte) const SizedBox(width: 4),
@@ -120,9 +119,7 @@ class _RoomCardState extends State<RoomCard> {
                       vertical: 4,
                     ),
                     decoration: BoxDecoration(
-                      color: widget.room.color.withValues(
-                        alpha: 0.2,
-                      ), // Utilise la couleur de la pièce ici aussi
+                      color: widget.room.color.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Row(
@@ -205,9 +202,38 @@ class _RoomCardState extends State<RoomCard> {
                         accentColor: widget.room.color,
                         onStats: (stats) {
                           setDialogState(() {
+                            // --- NOUVEAU : ALGORITHME D'ALERTE ---
+                            double oldTemp = widget.room.temperature;
+                            double newTemp = stats.currentTemperature;
+                            double delta = newTemp - oldTemp;
+
+                            // Vérifie si 5 minutes se sont écoulées depuis la dernière alerte
+                            bool canAlert = _lastAlertTime == null || DateTime.now().difference(_lastAlertTime!).inMinutes > 5;
+
+                            // On évite de lancer une alerte à la toute première lecture (quand oldTemp est encore à sa valeur par défaut)
+                            if (canAlert && oldTemp != 20.0) {
+                              if (delta >= 2.5 || newTemp > 30.0) {
+                                NotificationService.showTemperatureAlert(
+                                  roomName: widget.room.name, 
+                                  alertType: 'HAUSSE', 
+                                  temperature: newTemp
+                                );
+                                _lastAlertTime = DateTime.now();
+                              } 
+                              else if (delta <= -2.5 || newTemp < 10.0) {
+                                NotificationService.showTemperatureAlert(
+                                  roomName: widget.room.name, 
+                                  alertType: 'BAISSE', 
+                                  temperature: newTemp
+                                );
+                                _lastAlertTime = DateTime.now();
+                              }
+                            }
+                            // -------------------------------------
+
                             _liveStats = stats;
-                            widget.room.temperature = stats.currentTemperature;
-                            widget.room.lastKnownTemperature = stats.currentTemperature;
+                            widget.room.temperature = newTemp;
+                            widget.room.lastKnownTemperature = newTemp;
                           });
                           setState(() {});
                         },
