@@ -11,6 +11,7 @@ class Room {
   bool showTemperature;
   bool showPresence;
   bool isFroidAlerte;
+  bool hasCamera; // <-- NOUVEAU : Indique si la pièce possède une caméra
 
   // Coordonnées pour le plan architecte
   double x;
@@ -27,8 +28,9 @@ class Room {
     this.showTemperature = true,
     this.showPresence = true,
     this.isFroidAlerte = false,
-    this.x = 50.0, // Position par défaut
-    this.y = 50.0, // Position par défaut
+    this.hasCamera = true, // <-- Par défaut sur true pour rétrocompatibilité
+    this.x = 50.0, 
+    this.y = 50.0, 
   });
 
   String get cameraStreamUrl {
@@ -79,6 +81,7 @@ class Room {
       'showTemperature': showTemperature,
       'showPresence': showPresence,
       'isFroidAlerte': isFroidAlerte,
+      'hasCamera': hasCamera, // <-- Sauvegarde
       'x': x,
       'y': y,
     };
@@ -103,6 +106,7 @@ class Room {
       showTemperature: map['showTemperature'] ?? true,
       showPresence: map['showPresence'] ?? true,
       isFroidAlerte: map['isFroidAlerte'] ?? false,
+      hasCamera: map['hasCamera'] ?? true, // <-- Récupération
       x: map['x']?.toDouble() ?? 50.0,
       y: map['y']?.toDouble() ?? 50.0,
     );

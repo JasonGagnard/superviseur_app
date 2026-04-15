@@ -1,5 +1,5 @@
 import 'dart:convert';
-
+import 'profile_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/room.dart';
@@ -31,8 +31,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   String get _storageKeyRooms => 'plan_rooms_${widget.userEmail}';
   String get _storageKeyScenarios => 'scenarios_${widget.userEmail}';
-
-  bool _isScenarioPressed = false;
 
   @override
   void initState() {
@@ -155,18 +153,16 @@ class _HomeScreenState extends State<HomeScreen> {
       bool targetState = !_scenarios[index].isActive;
 
       if (targetState) {
-        // On veut activer le scénario [index]
         List<String> roomsOfNewScenario = _scenarios[index].roomNames;
 
         for (var i = 0; i < _scenarios.length; i++) {
-          if (i == index) continue; // Ne pas se comparer à soi-même
+          if (i == index) continue; 
           if (_scenarios[i].isActive) {
-            // Vérifier s'ils partagent des pièces
             bool hasConflict = _scenarios[i].roomNames.any(
               (room) => roomsOfNewScenario.contains(room),
             );
             if (hasConflict) {
-              _scenarios[i].isActive = false; // Désactiver l'ancien
+              _scenarios[i].isActive = false; 
               AppLogger.log(
                 widget.userEmail,
                 "Conflit : Scénario '${_scenarios[i].name}' désactivé.",
@@ -190,7 +186,6 @@ class _HomeScreenState extends State<HomeScreen> {
     final bool isEditing = index != null;
     final Scenario? currentScenario = isEditing ? _scenarios[index] : null;
 
-    // Pré-remplissage des données si on édite
     String sName = currentScenario?.name ?? "";
     List<String> selectedRooms = currentScenario != null
         ? List<String>.from(currentScenario.roomNames)
@@ -514,6 +509,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _cameraUrlController.clear();
     String? selEsp;
     Color selColor = Colors.blue;
+    bool hasCamera = true; 
 
     showDialog(
       context: context,
@@ -531,9 +527,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   TextField(
                     controller: _nameController,
-                    decoration: const InputDecoration(labelText: "Nom"),
+                    decoration: const InputDecoration(labelText: "Nom de la pièce"),
                   ),
                   const SizedBox(height: 20),
+                  
                   if (remainingEsps.isEmpty)
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: 8.0),
@@ -556,19 +553,36 @@ class _HomeScreenState extends State<HomeScreen> {
                           .toList(),
                       onChanged: (v) => setPopupState(() => selEsp = v),
                     ),
+                  
                   const SizedBox(height: 20),
-                  TextField(
-                    controller: _cameraUrlController,
-                    decoration: const InputDecoration(
-                      labelText: "URL du WebSocket thermique",
-                      hintText: "ws://<ip-esp32>:81/",
+                  
+                  // --- SWITCH CAMÉRA THERMIQUE ---
+                  SwitchListTile(
+                    title: const Text("Caméra thermique intégrée"),
+                    subtitle: const Text("Désactiver si c'est un simple capteur Temp/Présence", style: TextStyle(fontSize: 11)),
+                    value: hasCamera,
+                    activeColor: selColor,
+                    contentPadding: EdgeInsets.zero,
+                    onChanged: (val) => setPopupState(() => hasCamera = val),
+                  ),
+
+                  // L'URL de la caméra n'apparaît QUE si l'interrupteur est activé !
+                  if (hasCamera) ...[
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _cameraUrlController,
+                      decoration: const InputDecoration(
+                        labelText: "URL du WebSocket thermique",
+                        hintText: "ws://<ip-esp32>:81/",
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  const Text(
-                    "Optionnel: laisse vide si le port 81 est utilisé par défaut.",
-                    style: TextStyle(fontSize: 11, color: Colors.grey),
-                  ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      "Optionnel: laisse vide si le port 81 est utilisé par défaut.",
+                      style: TextStyle(fontSize: 11, color: Colors.grey),
+                    ),
+                  ],
+
                   const SizedBox(height: 20),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -619,8 +633,9 @@ class _HomeScreenState extends State<HomeScreen> {
                             Room(
                               name: _nameController.text,
                               espIp: selEsp!,
-                              cameraUrl: streamUrl,
+                              cameraUrl: hasCamera ? streamUrl : '', 
                               color: selColor,
+                              hasCamera: hasCamera, 
                             ),
                           );
                           _saveData();
@@ -641,7 +656,21 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF0F2F5),
       appBar: AppBar(
-        title: Text("SACHA - Plan de ${widget.userEmail}"),
+        // --- NOUVEAU : Titre avec le nom en bleu SACHA ---
+        title: Text.rich(
+          TextSpan(
+            text: "Plan de ",
+            children: [
+              TextSpan(
+                text: widget.userEmail,
+                style: const TextStyle(
+                  color: Color(0xFF00B0FF), // Bleu SACHA
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ),
         actions: [
           if (_isScanningEsp32)
             const Padding(
@@ -659,8 +688,25 @@ class _HomeScreenState extends State<HomeScreen> {
             tooltip: 'Analyser le réseau',
             onPressed: () => _refreshEsp32Discovery(),
           ),
+          
+          IconButton(
+            icon: const Icon(Icons.account_circle),
+            tooltip: 'Mon Profil',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (c) => ProfileScreen(
+                  username: widget.userEmail, 
+                  roomCount: _rooms.length, 
+                  scenarioCount: _scenarios.length
+                ),
+              ),
+            ),
+          ),
+
           IconButton(
             icon: const Icon(Icons.settings),
+            tooltip: 'Paramètres',
             onPressed: () => Navigator.push(
               context,
               MaterialPageRoute(
@@ -702,7 +748,7 @@ class _HomeScreenState extends State<HomeScreen> {
             child: _rooms.isEmpty
                 ? const Center(
                     child: Text(
-                      "Plan vide.\nAppuyez sur + pour commencer.",
+                      "Plan vide.\nAppuyez sur le bouton pour ajouter une pièce.",
                       textAlign: TextAlign.center,
                     ),
                   )
@@ -746,15 +792,33 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Padding(
-                  padding: EdgeInsets.only(left: 20, top: 15, bottom: 5),
-                  child: Text(
-                    "Mes Scénarios",
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.blueGrey,
-                    ),
+                Padding(
+                  padding: const EdgeInsets.only(left: 20, top: 15, right: 15, bottom: 5),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        "Mes Scénarios",
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blueGrey,
+                        ),
+                      ),
+                      TextButton.icon(
+                        onPressed: () => _showScenarioForm(),
+                        icon: const Icon(Icons.bolt, color: Color(0xFF00B0FF), size: 22), 
+                        label: const Text(
+                          "Créer un scénario", 
+                          style: TextStyle(color: Color(0xFF00B0FF), fontWeight: FontWeight.bold, fontSize: 14) 
+                        ),
+                        style: TextButton.styleFrom(
+                          backgroundColor: const Color(0xFF00B0FF).withOpacity(0.1),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10), 
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 SizedBox(
@@ -795,7 +859,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                         color: scenario.isActive
                                             ? color
                                             : color.withOpacity(0.3),
-                                        width: 1.0, // Bordure fine
+                                        width: 1.0, 
                                       ),
                                       boxShadow: scenario.isActive
                                           ? [
@@ -870,61 +934,17 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
 
-      // --- LA ZONE DES BOUTONS FLOTTANTS ---
-      floatingActionButton: Column(
-        mainAxisAlignment: MainAxisAlignment.end,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          // BOUTON PREMIUM "AJOUTER SCÉNARIO"
-          GestureDetector(
-            onTapDown: (_) => setState(() => _isScenarioPressed = true),
-            onTapUp: (_) {
-              setState(() => _isScenarioPressed = false);
-              _showScenarioForm();
-            },
-            onTapCancel: () => setState(() => _isScenarioPressed = false),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(30),
-                gradient: LinearGradient(
-                  colors: _isScenarioPressed
-                      ? [const Color(0xFF11998E), const Color(0xFF38EF7D)]
-                      : [const Color(0xFF00C6FF), const Color(0xFF0072FF)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.bolt, color: Colors.white),
-                  SizedBox(width: 8),
-                  Text(
-                    "Ajouter Scénario",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 15),
-
-          // BOUTON CLASSIQUE "AJOUTER PIÈCE"
-          FloatingActionButton(
-            heroTag: "btnRoom",
-            backgroundColor: Colors.blueGrey,
-            elevation: 4,
-            onPressed: _showAddRoom,
-            child: const Icon(Icons.add, color: Colors.white),
-          ),
-        ],
+      // --- Le bouton étendu avec le texte "Ajouter une pièce" ---
+      floatingActionButton: FloatingActionButton.extended(
+        heroTag: "btnRoom",
+        backgroundColor: const Color(0xFF00B0FF), // Ton bleu SACHA
+        elevation: 6,
+        onPressed: _showAddRoom,
+        icon: const Icon(Icons.add, color: Colors.white),
+        label: const Text(
+          "Ajouter une pièce",
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
       ),
     );
   }

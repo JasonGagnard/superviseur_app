@@ -3,9 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/room.dart';
 import 'live_thermal_stream.dart';
-import '../screens/room_stats_screen.dart'; // <-- NOUVEAU : Import de l'écran des statistiques
+import '../screens/room_stats_screen.dart'; 
 import '../utils/esp32_discovery.dart';
-import '../utils/notification_service.dart'; // <-- NOUVEAU : Le service de notifications
+import '../utils/notification_service.dart'; 
 
 class RoomCard extends StatefulWidget {
   final Room room;
@@ -22,7 +22,7 @@ class _RoomCardState extends State<RoomCard> {
   Timer? _espPresenceTimer;
   bool _isCheckingEspPresence = true;
   bool _isEspOnline = false;
-  DateTime? _lastAlertTime; // <-- NOUVEAU : Mémoire de la dernière alerte
+  DateTime? _lastAlertTime; 
 
   String _formatTemperature(double value) => '${value.toStringAsFixed(1)}°C';
 
@@ -56,7 +56,6 @@ class _RoomCardState extends State<RoomCard> {
       if (!mounted) {
         return;
       }
-
       setState(() {
         _isCheckingEspPresence = false;
         _isEspOnline = false;
@@ -175,7 +174,6 @@ class _RoomCardState extends State<RoomCard> {
                       ),
                     ),
 
-                    // ------------------------------------
                     if (widget.room.isFroidAlerte)
                       const Icon(Icons.ac_unit, color: Colors.blue, size: 18),
                     if (widget.room.isFroidAlerte) const SizedBox(width: 4),
@@ -231,38 +229,40 @@ class _RoomCardState extends State<RoomCard> {
                     _buildEspStatusChip(),
                   ],
                 ),
-                InkWell(
-                  onTap: () => _showCameraView(context),
-                  borderRadius: BorderRadius.circular(8),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: widget.room.color.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.videocam,
-                          color: widget.room.color,
-                          size: 18,
-                        ),
-                        const SizedBox(width: 4),
-                        const Text(
-                          "Live",
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: Colors.blueGrey,
-                            fontWeight: FontWeight.bold,
+                // --- CONDITION : Bouton Live affiché uniquement si caméra présente ---
+                if (widget.room.hasCamera)
+                  InkWell(
+                    onTap: () => _showCameraView(context),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: widget.room.color.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.videocam,
+                            color: widget.room.color,
+                            size: 18,
                           ),
-                        ),
-                      ],
+                          const SizedBox(width: 4),
+                          const Text(
+                            "Live",
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Colors.blueGrey,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
               ],
             ),
           ],
@@ -327,15 +327,12 @@ class _RoomCardState extends State<RoomCard> {
                         accentColor: widget.room.color,
                         onStats: (stats) {
                           setDialogState(() {
-                            // --- NOUVEAU : ALGORITHME D'ALERTE ---
                             double oldTemp = widget.room.temperature;
                             double newTemp = stats.currentTemperature;
                             double delta = newTemp - oldTemp;
 
-                            // Vérifie si 5 minutes se sont écoulées depuis la dernière alerte
                             bool canAlert = _lastAlertTime == null || DateTime.now().difference(_lastAlertTime!).inMinutes > 5;
 
-                            // On évite de lancer une alerte à la toute première lecture (quand oldTemp est encore à sa valeur par défaut)
                             if (canAlert && oldTemp != 20.0) {
                               if (delta >= 2.5 || newTemp > 30.0) {
                                 NotificationService.showTemperatureAlert(
@@ -354,12 +351,10 @@ class _RoomCardState extends State<RoomCard> {
                                 _lastAlertTime = DateTime.now();
                               }
                             }
-                            // -------------------------------------
 
                             _liveStats = stats;
                             widget.room.temperature = stats.currentTemperature;
-                            widget.room.lastKnownTemperature =
-                                stats.currentTemperature;
+                            widget.room.lastKnownTemperature = stats.currentTemperature;
                             widget.room.temperature = newTemp;
                             widget.room.lastKnownTemperature = newTemp;
                           });
@@ -452,11 +447,13 @@ class _RoomCardState extends State<RoomCard> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildDetailRow(Icons.wifi, "IP ESP32", widget.room.espIp),
-            _buildDetailRow(
-              Icons.wifi_tethering,
-              "WebSocket",
-              widget.room.cameraStreamUrl,
-            ),
+            // --- CONDITION : URL Websocket affichée uniquement si caméra présente ---
+            if (widget.room.hasCamera)
+              _buildDetailRow(
+                Icons.wifi_tethering,
+                "WebSocket Caméra",
+                widget.room.cameraStreamUrl,
+              ),
             _buildDetailRow(
               Icons.thermostat,
               "Temp. Actuelle",
