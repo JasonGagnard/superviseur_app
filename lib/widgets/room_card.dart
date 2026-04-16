@@ -1,11 +1,13 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+
 import '../models/room.dart';
-import 'live_thermal_stream.dart';
-import '../screens/room_stats_screen.dart'; 
+import '../screens/room_stats_screen.dart';
+import '../services/backend_api.dart';
 import '../utils/esp32_discovery.dart';
-import '../utils/notification_service.dart'; 
+import '../utils/notification_service.dart';
+import 'live_thermal_stream.dart';
 
 class RoomCard extends StatefulWidget {
   final Room room;
@@ -20,9 +22,13 @@ class RoomCard extends StatefulWidget {
 class _RoomCardState extends State<RoomCard> {
   ThermalFrameStats? _liveStats;
   Timer? _espPresenceTimer;
+  Timer? _inferenceCooldownTimer;
   bool _isCheckingEspPresence = true;
   bool _isEspOnline = false;
-  DateTime? _lastAlertTime; 
+  bool _isInferenceRunning = false;
+  DateTime? _lastAlertTime;
+  DateTime? _lastInferenceTime;
+  List<double>? _pendingInferenceFrame;
 
   String _formatTemperature(double value) => '${value.toStringAsFixed(1)}°C';
 
@@ -47,6 +53,7 @@ class _RoomCardState extends State<RoomCard> {
   @override
   void dispose() {
     _espPresenceTimer?.cancel();
+    _inferenceCooldownTimer?.cancel();
     super.dispose();
   }
 
@@ -78,6 +85,63 @@ class _RoomCardState extends State<RoomCard> {
       _isCheckingEspPresence = false;
       _isEspOnline = isOnline;
     });
+  }
+
+  void _handleThermalFrame(List<double> frame) {
+    if (!widget.room.hasCamera) {
+      return;
+    }
+
+    _pendingInferenceFrame = frame;
+    _scheduleThermalInference();
+  }
+
+  void _scheduleThermalInference() {
+    if (_isInferenceRunning) {
+      return;
+    }
+
+    final lastInferenceTime = _lastInferenceTime;
+    if (lastInferenceTime != null &&
+        DateTime.now().difference(lastInferenceTime).inSeconds < 8) {
+      _inferenceCooldownTimer?.cancel();
+      _inferenceCooldownTimer = Timer(const Duration(seconds: 1), () {
+        if (mounted) {
+          _scheduleThermalInference();
+        }
+      });
+      return;
+    }
+
+    final frame = _pendingInferenceFrame;
+    if (frame == null || frame.length != 32 * 24) {
+      return;
+    }
+
+    _pendingInferenceFrame = null;
+    _isInferenceRunning = true;
+    _lastInferenceTime = DateTime.now();
+
+    BackendApi.instance
+        .detectPresenceFromThermalFrame(frame)
+        .then((result) {
+          if (!mounted) {
+            return;
+          }
+
+          setState(() {
+            widget.room.isOccupied = (result['human_count'] as num? ?? 0) > 0;
+          });
+        })
+        .catchError((_) {
+          // Keep the last presence state if inference is temporarily unavailable.
+        })
+        .whenComplete(() {
+          _isInferenceRunning = false;
+          if (_pendingInferenceFrame != null && mounted) {
+            _scheduleThermalInference();
+          }
+        });
   }
 
   Widget _buildEspStatusChip() {
@@ -173,7 +237,6 @@ class _RoomCardState extends State<RoomCard> {
                         ),
                       ),
                     ),
-
                     if (widget.room.isFroidAlerte)
                       const Icon(Icons.ac_unit, color: Colors.blue, size: 18),
                     if (widget.room.isFroidAlerte) const SizedBox(width: 4),
@@ -229,7 +292,6 @@ class _RoomCardState extends State<RoomCard> {
                     _buildEspStatusChip(),
                   ],
                 ),
-                // --- CONDITION : Bouton Live affiché uniquement si caméra présente ---
                 if (widget.room.hasCamera)
                   InkWell(
                     onTap: () => _showCameraView(context),
@@ -325,36 +387,39 @@ class _RoomCardState extends State<RoomCard> {
                       child: LiveThermalStream(
                         streamUrl: widget.room.cameraStreamUrl,
                         accentColor: widget.room.color,
+                        onFrame: _handleThermalFrame,
                         onStats: (stats) {
                           setDialogState(() {
-                            double oldTemp = widget.room.temperature;
-                            double newTemp = stats.currentTemperature;
-                            double delta = newTemp - oldTemp;
+                            final oldTemp = widget.room.temperature;
+                            final newTemp = stats.currentTemperature;
+                            final delta = newTemp - oldTemp;
 
-                            bool canAlert = _lastAlertTime == null || DateTime.now().difference(_lastAlertTime!).inMinutes > 5;
+                            final canAlert =
+                                _lastAlertTime == null ||
+                                DateTime.now()
+                                        .difference(_lastAlertTime!)
+                                        .inMinutes >
+                                    5;
 
                             if (canAlert && oldTemp != 20.0) {
                               if (delta >= 2.5 || newTemp > 30.0) {
                                 NotificationService.showTemperatureAlert(
-                                  roomName: widget.room.name, 
-                                  alertType: 'HAUSSE', 
-                                  temperature: newTemp
+                                  roomName: widget.room.name,
+                                  alertType: 'HAUSSE',
+                                  temperature: newTemp,
                                 );
                                 _lastAlertTime = DateTime.now();
-                              } 
-                              else if (delta <= -2.5 || newTemp < 10.0) {
+                              } else if (delta <= -2.5 || newTemp < 10.0) {
                                 NotificationService.showTemperatureAlert(
-                                  roomName: widget.room.name, 
-                                  alertType: 'BAISSE', 
-                                  temperature: newTemp
+                                  roomName: widget.room.name,
+                                  alertType: 'BAISSE',
+                                  temperature: newTemp,
                                 );
                                 _lastAlertTime = DateTime.now();
                               }
                             }
 
                             _liveStats = stats;
-                            widget.room.temperature = stats.currentTemperature;
-                            widget.room.lastKnownTemperature = stats.currentTemperature;
                             widget.room.temperature = newTemp;
                             widget.room.lastKnownTemperature = newTemp;
                           });
@@ -447,7 +512,6 @@ class _RoomCardState extends State<RoomCard> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildDetailRow(Icons.wifi, "IP ESP32", widget.room.espIp),
-            // --- CONDITION : URL Websocket affichée uniquement si caméra présente ---
             if (widget.room.hasCamera)
               _buildDetailRow(
                 Icons.wifi_tethering,

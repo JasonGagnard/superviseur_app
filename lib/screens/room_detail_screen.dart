@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../models/room.dart';
 import '../widgets/live_thermal_stream.dart';
@@ -13,6 +15,16 @@ class RoomDetailScreen extends StatefulWidget {
 
 class _RoomDetailScreenState extends State<RoomDetailScreen> {
   ThermalFrameStats? _liveStats;
+  Timer? _inferenceCooldownTimer;
+  bool _isInferenceRunning = false;
+  DateTime? _lastInferenceTime;
+  List<double>? _pendingInferenceFrame;
+
+  @override
+  void dispose() {
+    _inferenceCooldownTimer?.cancel();
+    super.dispose();
+  }
 
   Future<void> _syncRoomDisplayPrefs() async {
     if (widget.room.id == null) {
@@ -27,6 +39,63 @@ class _RoomDetailScreenState extends State<RoomDetailScreen> {
     } catch (_) {
       // Ignore API failure to keep detail interactions smooth.
     }
+  }
+
+  void _handleThermalFrame(List<double> frame) {
+    if (!widget.room.hasCamera) {
+      return;
+    }
+
+    _pendingInferenceFrame = frame;
+    _scheduleThermalInference();
+  }
+
+  void _scheduleThermalInference() {
+    if (_isInferenceRunning) {
+      return;
+    }
+
+    final lastInferenceTime = _lastInferenceTime;
+    if (lastInferenceTime != null &&
+        DateTime.now().difference(lastInferenceTime).inSeconds < 8) {
+      _inferenceCooldownTimer?.cancel();
+      _inferenceCooldownTimer = Timer(const Duration(seconds: 1), () {
+        if (mounted) {
+          _scheduleThermalInference();
+        }
+      });
+      return;
+    }
+
+    final frame = _pendingInferenceFrame;
+    if (frame == null || frame.length != 32 * 24) {
+      return;
+    }
+
+    _pendingInferenceFrame = null;
+    _isInferenceRunning = true;
+    _lastInferenceTime = DateTime.now();
+
+    BackendApi.instance
+        .detectPresenceFromThermalFrame(frame)
+        .then((result) {
+          if (!mounted) {
+            return;
+          }
+
+          setState(() {
+            widget.room.isOccupied = (result['human_count'] as num? ?? 0) > 0;
+          });
+        })
+        .catchError((_) {
+          // Keep the current presence state if inference is temporarily unavailable.
+        })
+        .whenComplete(() {
+          _isInferenceRunning = false;
+          if (_pendingInferenceFrame != null && mounted) {
+            _scheduleThermalInference();
+          }
+        });
   }
 
   String _formatTemperature(double value) => '${value.toStringAsFixed(1)}°C';
@@ -229,6 +298,7 @@ class _RoomDetailScreenState extends State<RoomDetailScreen> {
                       child: LiveThermalStream(
                         streamUrl: widget.room.cameraStreamUrl,
                         accentColor: widget.room.color,
+                        onFrame: _handleThermalFrame,
                         onStats: (stats) {
                           setState(() {
                             _liveStats = stats;

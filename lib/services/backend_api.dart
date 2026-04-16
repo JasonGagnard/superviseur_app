@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -35,7 +36,9 @@ class BackendApi {
 
   Uri _uri(String path, [Map<String, String>? query]) {
     final normalizedPath = path.startsWith('/') ? path : '/$path';
-    return Uri.parse('$_baseUrl$normalizedPath').replace(queryParameters: query);
+    return Uri.parse(
+      '$_baseUrl$normalizedPath',
+    ).replace(queryParameters: query);
   }
 
   Map<String, dynamic> _decodeObject(http.Response response) {
@@ -55,13 +58,25 @@ class BackendApi {
   }
 
   Never _throwError(http.Response response) {
+    String? message;
+
     try {
       final data = _decodeObject(response);
-      final message = data['error']?.toString() ?? data['message']?.toString();
-      throw BackendApiException(message ?? 'HTTP ${response.statusCode}');
+      message = data['error']?.toString() ?? data['message']?.toString();
     } catch (_) {
-      throw BackendApiException('HTTP ${response.statusCode}');
+      message = null;
     }
+
+    throw BackendApiException(message ?? 'HTTP ${response.statusCode}');
+  }
+
+  Uint8List _thermalFrameToBytes(List<double> frame) {
+    final byteData = ByteData(frame.length * 4);
+    for (var index = 0; index < frame.length; index++) {
+      byteData.setFloat32(index * 4, frame[index], Endian.little);
+    }
+
+    return byteData.buffer.asUint8List();
   }
 
   Future<Map<String, dynamic>> login({
@@ -125,12 +140,14 @@ class BackendApi {
       _throwError(response);
     }
 
-    return _decodeList(response)
-        .map((item) => Map<String, dynamic>.from(item as Map))
-        .toList();
+    return _decodeList(
+      response,
+    ).map((item) => Map<String, dynamic>.from(item as Map)).toList();
   }
 
-  Future<Map<String, dynamic>> createEspNode(Map<String, dynamic> payload) async {
+  Future<Map<String, dynamic>> createEspNode(
+    Map<String, dynamic> payload,
+  ) async {
     final response = await http.post(
       _uri('/api/esp-nodes'),
       headers: {'Content-Type': 'application/json'},
@@ -144,7 +161,10 @@ class BackendApi {
     return _decodeObject(response);
   }
 
-  Future<Map<String, dynamic>> updateEspNode(int nodeId, Map<String, dynamic> payload) async {
+  Future<Map<String, dynamic>> updateEspNode(
+    int nodeId,
+    Map<String, dynamic> payload,
+  ) async {
     final response = await http.put(
       _uri('/api/esp-nodes/$nodeId'),
       headers: {'Content-Type': 'application/json'},
@@ -174,12 +194,14 @@ class BackendApi {
       _throwError(response);
     }
 
-    return _decodeList(response)
-        .map((item) => Map<String, dynamic>.from(item as Map))
-        .toList();
+    return _decodeList(
+      response,
+    ).map((item) => Map<String, dynamic>.from(item as Map)).toList();
   }
 
-  Future<Map<String, dynamic>> createScenario(Map<String, dynamic> payload) async {
+  Future<Map<String, dynamic>> createScenario(
+    Map<String, dynamic> payload,
+  ) async {
     final response = await http.post(
       _uri('/api/scenarios'),
       headers: {'Content-Type': 'application/json'},
@@ -193,7 +215,10 @@ class BackendApi {
     return _decodeObject(response);
   }
 
-  Future<Map<String, dynamic>> updateScenario(int scenarioId, Map<String, dynamic> payload) async {
+  Future<Map<String, dynamic>> updateScenario(
+    int scenarioId,
+    Map<String, dynamic> payload,
+  ) async {
     final response = await http.put(
       _uri('/api/scenarios/$scenarioId'),
       headers: {'Content-Type': 'application/json'},
@@ -214,15 +239,36 @@ class BackendApi {
     }
   }
 
+  Future<Map<String, dynamic>> detectPresenceFromThermalFrame(
+    List<double> frame,
+  ) async {
+    if (frame.length != 32 * 24) {
+      throw BackendApiException('Invalid thermal frame size');
+    }
+
+    final request = http.MultipartRequest('POST', _uri('/inference/detect'));
+    request.files.add(
+      http.MultipartFile.fromBytes(
+        'image',
+        _thermalFrameToBytes(frame),
+        filename: 'thermal.bin',
+      ),
+    );
+
+    final response = await http.Response.fromStream(await request.send());
+    if (response.statusCode != 200) {
+      _throwError(response);
+    }
+
+    return _decodeObject(response);
+  }
+
   Future<List<Map<String, dynamic>>> listLogs({
     required String username,
     String? logType,
     int limit = 200,
   }) async {
-    final query = <String, String>{
-      'username': username,
-      'limit': '$limit',
-    };
+    final query = <String, String>{'username': username, 'limit': '$limit'};
     if (logType != null) {
       query['log_type'] = logType;
     }
@@ -232,9 +278,9 @@ class BackendApi {
       _throwError(response);
     }
 
-    return _decodeList(response)
-        .map((item) => Map<String, dynamic>.from(item as Map))
-        .toList();
+    return _decodeList(
+      response,
+    ).map((item) => Map<String, dynamic>.from(item as Map)).toList();
   }
 
   Future<Map<String, dynamic>> createLog({
@@ -276,9 +322,9 @@ class BackendApi {
       _throwError(response);
     }
 
-    return _decodeList(response)
-        .map((item) => Map<String, dynamic>.from(item as Map))
-        .toList();
+    return _decodeList(
+      response,
+    ).map((item) => Map<String, dynamic>.from(item as Map)).toList();
   }
 
   Future<Map<String, dynamic>> scanEsp32OnBackend({

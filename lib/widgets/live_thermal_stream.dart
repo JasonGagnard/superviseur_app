@@ -20,12 +20,14 @@ class LiveThermalStream extends StatefulWidget {
   final String streamUrl;
   final Color accentColor;
   final ValueChanged<ThermalFrameStats>? onStats;
+  final ValueChanged<List<double>>? onFrame;
 
   const LiveThermalStream({
     super.key,
     required this.streamUrl,
     required this.accentColor,
     this.onStats,
+    this.onFrame,
   });
 
   @override
@@ -175,6 +177,8 @@ class _LiveThermalStreamState extends State<LiveThermalStream> {
       _errorText = null;
     });
 
+    widget.onFrame?.call(frame);
+
     widget.onStats?.call(
       ThermalFrameStats(
         currentTemperature: frame[frame.length ~/ 2],
@@ -219,30 +223,6 @@ class _LiveThermalStreamState extends State<LiveThermalStream> {
     _subscription = null;
     _channel?.sink.close();
     _channel = null;
-  }
-
-  String get _connectionLabel {
-    if (_frame != null) {
-      return 'Connecté en Temps Réel';
-    }
-
-    if (_connecting) {
-      return 'Connexion WebSocket...';
-    }
-
-    return _errorText ?? 'Déconnecté';
-  }
-
-  Color get _connectionColor {
-    if (_frame != null) {
-      return Colors.greenAccent;
-    }
-
-    if (_connecting) {
-      return Colors.orangeAccent;
-    }
-
-    return Colors.redAccent;
   }
 
   @override
