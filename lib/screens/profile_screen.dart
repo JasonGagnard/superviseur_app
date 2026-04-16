@@ -201,13 +201,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
       child: Padding(
         padding: const EdgeInsets.all(20.0),
         child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(icon, size: 30, color: color),
             const SizedBox(height: 10),
             Text(value, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
             Text(title, style: const TextStyle(color: Colors.grey)),
           ],
-          mainAxisAlignment: MainAxisAlignment.center,
         ),
       ),
     );

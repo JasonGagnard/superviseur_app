@@ -186,7 +186,7 @@ class _ConsumptionSimulatorScreenState extends State<ConsumptionSimulatorScreen>
                 children: [
                   Expanded(
                     child: DropdownButtonFormField<String>(
-                      value: _isolation,
+                      initialValue: _isolation,
                       dropdownColor: Colors.white,
                       style: const TextStyle(color: Colors.black87),
                       decoration: InputDecoration(

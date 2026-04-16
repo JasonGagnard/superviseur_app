@@ -50,13 +50,14 @@ class _HomeScreenState extends State<HomeScreen> {
         _rooms = roomsData.map(Room.fromApi).toList();
         _scenarios = scenariosData.map(Scenario.fromApi).toList();
       });
-    } catch (_) {
+    } catch (e) {
       if (!mounted) {
         return;
       }
+      print('ERROR LOADING DATA: $e');
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Impossible de charger les donnees backend.'),
+        SnackBar(
+          content: Text('Erreur backend: ${e.toString()}'),
           backgroundColor: Colors.redAccent,
         ),
       );
@@ -663,7 +664,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     title: const Text("Caméra thermique intégrée"),
                     subtitle: const Text("Désactiver si c'est un simple capteur Temp/Présence", style: TextStyle(fontSize: 11)),
                     value: hasCamera,
-                    activeColor: selColor,
+                    activeThumbColor: selColor,
                     contentPadding: EdgeInsets.zero,
                     onChanged: (val) => setPopupState(() => hasCamera = val),
                   ),
