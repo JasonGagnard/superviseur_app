@@ -55,6 +55,38 @@ lib/
 4. **Lancer l'application** :
    flutter run
 
+
+## BIBLIOTHÈQUE DES DÉPENDANCES FLUTTER (DICTIONNAIRE TECHNIQUE)
+
+1. [INTERFACE UTILISATEUR & DESIGN (UI/UX)]
+    fl_chart                     : Permet de générer des graphiques interactifs et esthétiques. 
+                               Utilisé pour afficher les historiques de température ou 
+                               les courbes du simulateur de consommation.
+    sleek_circular_slider        : Composant visuel sous forme de jauge circulaire. Utilisé 
+                               pour régler la température cible dans les scénarios de 
+                               manière fluide et ergonomique.
+    cupertino_icons              : Bibliothèque d'icônes par défaut d'Apple. Utilisée pour 
+                               compléter les icônes "Material" et donner un rendu premium.
+
+2. [COMMUNICATION RÉSEAU & IOT]
+    http                         : Gestion des requêtes API REST (GET, POST). Indispensable 
+                               pour communiquer avec des serveurs web classiques ou 
+                               envoyer des ordres ponctuels aux ESP32.
+    web_socket_channel           : Gestion des connexions bidirectionnelles en temps réel (ws://). 
+                               Crucial pour recevoir le flux continu de la caméra thermique 
+                               de l'ESP32 (port 81) sans surcharger le réseau.
+
+3. [STOCKAGE LOCAL & SYSTÈME]
+    shared_preferences           : Permet d'écrire des données légères directement sur le 
+                               disque dur/mémoire de l'appareil (format clé-valeur). 
+                               Utilisé pour sauvegarder la mémoire des ESP32, les pièces, 
+                               les scénarios et le profil utilisateur après redémarrage.
+    image_picker                 : Autorise l'application à accéder à la galerie photo ou à 
+                               l'appareil photo natif du téléphone. Utilisé pour 
+                               personnaliser l'avatar du profil utilisateur.
+    flutter_local_notifications  : Interagit avec le centre de notifications du système 
+                               d'exploitation (Android/iOS). Utilisé pour afficher les 
+                               alertes critiques en temps réel (chutes/hausses de température).
 ## 📊 Composition du Code
 
 - **Dart** : 76.3% (Cœur de l'application)
